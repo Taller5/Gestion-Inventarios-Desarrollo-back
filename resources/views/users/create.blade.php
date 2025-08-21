@@ -1,3 +1,4 @@
+
 @extends('layouts.app')
 
 @section('content')
@@ -12,36 +13,36 @@
             </ul>
         </div>
     @endif
-    <form action="{{ route('usuarios.store') }}" method="POST">
+    <form action="{{ route('users.store') }}" method="POST">
         @csrf
         <div class="mb-3">
             <label>Nombre</label>
-            <input type="text" name="nombre" class="form-control" required>
+            <input type="text" name="name" class="form-control" required>
         </div>
         <div class="mb-3">
             <label>Teléfono</label>
-            <input type="text" name="telefono" class="form-control">
+            <input type="text" name="phone" class="form-control">
         </div>
         <div class="mb-3">
             <label>Correo</label>
-            <input type="email" name="correo" class="form-control" required>
+            <input type="email" name="email" class="form-control" required>
         </div>
         <div class="mb-3">
             <label>Contraseña</label>
-            <input type="password" name="contrasena" class="form-control" required>
+            <input type="password" name="password" class="form-control" required>
         </div>
         <div class="mb-3">
             <label>Rol</label>
-            <select name="id_rol" class="form-control" required>
+            <select name="role_id" class="form-control" required>
                 <option value="">Seleccione un rol</option>
-                @foreach($roles as $rol)
-                    <option value="{{ $rol->id_rol }}">{{ ucfirst($rol->nombre_rol) }}</option>
+                @foreach($roles as $role)
+                    <option value="{{ $role->role_id }}">{{ ucfirst($role->role_name) }}</option>
                 @endforeach
             </select>
         </div>
         <div class="mb-3">
             <label>Estado</label>
-            <select name="activo" class="form-control" required>
+            <select name="active" class="form-control" required>
                 <option value="1">Activo</option>
                 <option value="0">Inactivo</option>
             </select>

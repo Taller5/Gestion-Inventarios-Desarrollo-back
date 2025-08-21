@@ -1,5 +1,4 @@
 
-
 @extends('layouts.app')
 
 @section('content')
@@ -14,38 +13,38 @@
             </ul>
         </div>
     @endif
-    <form action="{{ route('usuarios.update', $usuario->id_usuario) }}" method="POST">
+    <form action="{{ route('users.update', $user->user_id) }}" method="POST">
         @csrf
         @method('PUT')
         <div class="mb-3">
             <label>Nombre</label>
-            <input type="text" name="nombre" class="form-control" value="{{ $usuario->nombre }}" required>
+            <input type="text" name="name" class="form-control" value="{{ $user->name }}" required>
         </div>
         <div class="mb-3">
             <label>Teléfono</label>
-            <input type="text" name="telefono" class="form-control" value="{{ $usuario->telefono }}">
+            <input type="text" name="phone" class="form-control" value="{{ $user->phone }}">
         </div>
         <div class="mb-3">
             <label>Correo</label>
-            <input type="email" name="correo" class="form-control" value="{{ $usuario->correo }}" required>
+            <input type="email" name="email" class="form-control" value="{{ $user->email }}" required>
         </div>
         <div class="mb-3">
             <label>Nueva Contraseña (opcional)</label>
-            <input type="password" name="contrasena" class="form-control">
+            <input type="password" name="password" class="form-control">
         </div>
         <div class="mb-3">
             <label>Rol</label>
-            <select name="id_rol" class="form-control" required>
-                @foreach($roles as $rol)
-                    <option value="{{ $rol->id_rol }}" {{ $usuario->id_rol == $rol->id_rol ? 'selected' : '' }}>{{ ucfirst($rol->nombre_rol) }}</option>
+            <select name="role_id" class="form-control" required>
+                @foreach($roles as $role)
+                    <option value="{{ $role->role_id }}" {{ $user->role_id == $role->role_id ? 'selected' : '' }}>{{ ucfirst($role->role_name) }}</option>
                 @endforeach
             </select>
         </div>
         <div class="mb-3">
             <label>Estado</label>
-            <select name="activo" class="form-control" required>
-                <option value="1" {{ $usuario->activo ? 'selected' : '' }}>Activo</option>
-                <option value="0" {{ !$usuario->activo ? 'selected' : '' }}>Inactivo</option>
+            <select name="active" class="form-control" required>
+                <option value="1" {{ $user->active ? 'selected' : '' }}>Activo</option>
+                <option value="0" {{ !$user->active ? 'selected' : '' }}>Inactivo</option>
             </select>
         </div>
         <button class="btn btn-success">Actualizar</button>
