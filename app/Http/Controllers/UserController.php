@@ -9,7 +9,8 @@ class UserController extends Controller
     public function index()
     {
         $users = User::all();
-        return view('users.index', compact('users'));
+        return response()->json($users);
+        //return view('users.index', compact('users'));
     }
 
     public function create()
@@ -31,7 +32,7 @@ class UserController extends Controller
             'profile_photo' => 'nullable|string',
         ]);
 
-        User::create([
+       $user = User::create([
             'name' => $request->name,
             'phone' => $request->phone,
             'email' => $request->email,
@@ -41,7 +42,8 @@ class UserController extends Controller
             'profile_photo' => $request->profile_photo,
         ]);
 
-        return redirect()->route('users.index')->with('success', 'Usuario creado correctamente.');
+          return response()->json($user, 201);
+       // return redirect()->route('users.index')->with('success', 'Usuario creado correctamente.');
     }
 
     public function edit($id)
@@ -49,6 +51,7 @@ class UserController extends Controller
         $user = User::findOrFail($id);
         $roles = ['administrador', 'supervisor', 'bodeguero', 'vendedor'];
         $statuses = ['activo', 'inactivo'];
+        
         return view('users.edit', compact('user', 'roles', 'statuses'));
     }
 
@@ -77,14 +80,26 @@ class UserController extends Controller
         }
 
         $user->save();
-
-        return redirect()->route('users.index')->with('success', 'Usuario actualizado correctamente.');
+        return response()->json($user);
+       // return redirect()->route('users.index')->with('success', 'Usuario actualizado correctamente.');
     }
 
     public function destroy($id)
     {
         $user = User::findOrFail($id);
         $user->delete();
-        return redirect()->route('users.index')->with('success', 'Usuario eliminado correctamente.');
+         return response()->json(['message' => 'Usuario eliminado correctamente']);
+        //return redirect()->route('users.index')->with('success', 'Usuario eliminado correctamente.');
     }
+
+    public function show($id)
+{
+    $user = User::with('role')->find($id);
+    if (!$user) {
+        return response()->json(['message' => 'Usuario no encontrado'], 404);
+    }
+    return response()->json($user);
 }
+}
+
+
