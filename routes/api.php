@@ -10,7 +10,9 @@ Route::get('/user', function (Request $request) {
 })->middleware('auth:sanctum');
 
 Route::prefix('v1')->group(function () {
-    Route::get('employees', [UserController::class, 'index']);        
+    Route::get('employees', [UserController::class, 'index']);  
+    Route::put('employees/{id}/password', [UserController::class, 'updatePassword']);
+    Route::post('employees/{id}/profile-photo', [UserController::class, 'updateProfilePhoto']);      
     Route::get('employees/{id}', [UserController::class, 'show']);    
     Route::post('employees', [UserController::class, 'store']);       
     Route::put('employees/{id}', [UserController::class, 'update']);  
