@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
+
 class UserController extends Controller
 {
     public function index()
@@ -73,7 +75,11 @@ class UserController extends Controller
         $user->email = $request->email;
         $user->role = $request->role;
         $user->status = $request->status;
-        $user->profile_photo = $request->profile_photo;
+        
+        // Solo actualizar la foto de perfil si se proporciona una nueva
+        if ($request->has('profile_photo') && !empty($request->profile_photo)) {
+            $user->profile_photo = $request->profile_photo;
+        }
 
         if ($request->filled('password')) {
             $user->password = Hash::make($request->password);
@@ -138,6 +144,30 @@ public function updateProfilePhoto(Request $request, $id)
 
     return response()->json(['message' => 'Foto de perfil actualizada', 'profile_photo' => $user->profile_photo]);
 }
+public function recoverPassword(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|email',
+        ]);
+
+        $user = User::where('email', $request->email)->first();
+        if (!$user) {
+            return response()->json(['message' => 'Usuario no encontrado'], 404);
+        }
+
+        // 1. Generar contraseña temporal
+        $temporaryPassword = Str::random(8);
+
+        // 2. Guardar como password encriptado
+        $user->password = Hash::make($temporaryPassword);
+        $user->save();
+
+        // 3. Retornar datos al frontend
+        return response()->json([
+            'id' => $user->id,
+            'name' => $user->name,
+            'email' => $user->email,
+            'temporaryPassword' => $temporaryPassword,
+        ]);
+    }
 }
-
-
