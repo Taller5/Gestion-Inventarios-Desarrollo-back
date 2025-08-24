@@ -100,6 +100,44 @@ class UserController extends Controller
     }
     return response()->json($user);
 }
+
+public function updatePassword(Request $request, $id)
+{
+    $user = User::findOrFail($id);
+
+    $request->validate([
+        'current_password' => 'required',
+        'new_password' => 'required|min:8|confirmed',
+    ]);
+
+    if (!Hash::check($request->current_password, $user->password)) {
+        return response()->json(['message' => 'La contraseña actual es incorrecta'], 422);
+    }
+
+    $user->password = Hash::make($request->new_password);
+    $user->save();
+
+    return response()->json(['message' => 'Contraseña actualizada correctamente']);
+}
+
+public function updateProfilePhoto(Request $request, $id)
+{
+    $user = User::findOrFail($id);
+
+    $request->validate([
+        'profile_photo' => 'required|image|mimes:jpg,jpeg,png|max:2048',
+    ]);
+
+    if ($request->hasFile('profile_photo')) {
+        $file = $request->file('profile_photo');
+        $filename = uniqid() . '.' . $file->getClientOriginalExtension();
+        $file->move(public_path('profile_photos'), $filename);
+        $user->profile_photo = 'profile_photos/' . $filename;
+        $user->save();
+    }
+
+    return response()->json(['message' => 'Foto de perfil actualizada', 'profile_photo' => $user->profile_photo]);
+}
 }
 
 
