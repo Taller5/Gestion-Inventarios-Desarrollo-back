@@ -75,7 +75,11 @@ class UserController extends Controller
         $user->email = $request->email;
         $user->role = $request->role;
         $user->status = $request->status;
-        $user->profile_photo = $request->profile_photo;
+        
+        // Solo actualizar la foto de perfil si se proporciona una nueva
+        if ($request->has('profile_photo') && !empty($request->profile_photo)) {
+            $user->profile_photo = $request->profile_photo;
+        }
 
         if ($request->filled('password')) {
             $user->password = Hash::make($request->password);
