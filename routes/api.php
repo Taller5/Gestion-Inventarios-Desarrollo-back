@@ -5,6 +5,9 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\UserController;
 use App\Http\Controllers\CustomerController;
+use App\Http\Controllers\BusinessController;
+use App\Http\Controllers\BranchController;
+use App\Http\Controllers\WarehouseController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -28,6 +31,27 @@ Route::prefix('v1')->group(function () {
     Route::post('customers', [CustomerController::class, 'store']);     // Crear
     Route::put('customers/{id}', [CustomerController::class, 'update']); // Actualizar
     Route::delete('customers/{id}', [CustomerController::class, 'destroy']); // Eliminar
+
+    // ------------------ Businesses ------------------
+    Route::get('businesses', [BusinessController::class, 'index']);
+    Route::get('businesses/{id}', [BusinessController::class, 'show']);
+    Route::post('businesses', [BusinessController::class, 'store']);
+    Route::put('businesses/{id}', [BusinessController::class, 'update']);
+    Route::delete('businesses/{id}', [BusinessController::class, 'destroy']);
+
+    // ------------------ Branches ------------------
+    Route::get('branches', [BranchController::class, 'index']);
+    Route::get('branches/{id}', [BranchController::class, 'show']);
+    Route::post('branches', [BranchController::class, 'store']);
+    Route::put('branches/{id}', [BranchController::class, 'update']);
+    Route::delete('branches/{id}', [BranchController::class, 'destroy']);
+
+    // ------------------ Warehouses ------------------
+    Route::get('warehouses', [WarehouseController::class, 'index']);
+    Route::get('warehouses/{id}', [WarehouseController::class, 'show']);
+    Route::post('warehouses', [WarehouseController::class, 'store']);
+    Route::put('warehouses/{id}', [WarehouseController::class, 'update']);
+    Route::delete('warehouses/{id}', [WarehouseController::class, 'destroy']);
 
 });
 
