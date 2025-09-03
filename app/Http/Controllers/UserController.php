@@ -28,7 +28,14 @@ class UserController extends Controller
             'name' => 'required',
             'phone' => 'nullable',
             'email' => 'required|email|unique:users,email',
-            'password' => 'required|min:6',
+            'password' => [
+                'required',
+                'min:6',
+                'regex:/[A-Z]/',      // al menos una mayúscula
+                'regex:/[a-z]/',      // al menos una minúscula
+                'regex:/[0-9]/',      // al menos un número
+                'regex:/[\W_]/',      // al menos un caracter especial
+            ],
             'role' => 'required|in:administrador,supervisor,bodeguero,vendedor',
             'status' => 'required|in:activo,inactivo',
             'profile_photo' => 'nullable|string',
@@ -113,7 +120,15 @@ public function updatePassword(Request $request, $id)
 
     $request->validate([
         'current_password' => 'required',
-        'new_password' => 'required|min:8|confirmed',
+        'new_password' => [
+            'required',
+            'min:6',
+            'confirmed',
+            'regex:/[A-Z]/',      // al menos una mayúscula
+            'regex:/[a-z]/',      // al menos una minúscula
+            'regex:/[0-9]/',      // al menos un número
+            'regex:/[\W_]/',      // al menos un caracter especial
+        ],
     ]);
 
     if (!Hash::check($request->current_password, $user->password)) {
