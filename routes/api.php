@@ -8,6 +8,8 @@ use App\Http\Controllers\CustomerController;
 use App\Http\Controllers\BusinessController;
 use App\Http\Controllers\BranchController;
 use App\Http\Controllers\WarehouseController;
+use App\Http\Controllers\ProductController;
+use App\Http\Controllers\BatchController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -52,6 +54,20 @@ Route::prefix('v1')->group(function () {
     Route::post('warehouses', [WarehouseController::class, 'store']);
     Route::put('warehouses/{id}', [WarehouseController::class, 'update']);
     Route::delete('warehouses/{id}', [WarehouseController::class, 'destroy']);
+
+        // ------------------ Products ------------------
+    Route::get('products', [ProductController::class, 'index']);
+    Route::get('products/{id}', [ProductController::class, 'show']);
+    Route::post('products', [ProductController::class, 'store']);
+    Route::put('products/{id}', [ProductController::class, 'update']);
+    Route::delete('products/{id}', [ProductController::class, 'destroy']);
+
+    // ------------------ Batch ------------------
+    Route::get('batch', [BatchController::class, 'index']);
+    Route::get('batch/{id}', [BatchController::class, 'show']);
+    Route::post('batch', [BatchController::class, 'store']);
+    Route::put('batch/{id}', [BatchController::class, 'update']);
+    Route::delete('batch/{id}', [BatchController::class, 'destroy']);
 
 });
 
