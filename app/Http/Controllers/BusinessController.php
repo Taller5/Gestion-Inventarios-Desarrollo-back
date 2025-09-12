@@ -9,40 +9,46 @@ use Illuminate\Support\Facades\Validator;
 class BusinessController extends Controller
 {
     /**
-     * Display a listing of the businesses.
+     * Display the specified business.
      */
+    
     public function index()
     {
         $businesses = Business::all();
-        return response()->json($businesses);
+        return response()->json($businesses); // Devuelve [] si no hay negocios
     }
 
-    /**
-     * Store a newly created business in storage.
-     */
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
-            'nombre' => 'required|string|max:255',
+            'nombre_legal' => 'required|string|max:255',
+            'nombre_comercial' => 'required|string|max:255',
+            'tipo_identificacion' => 'required|string|max:255',
+            'numero_identificacion' => 'required|string|unique:businesses,numero_identificacion',
+            'margen_ganancia' => 'nullable|numeric',
             'descripcion' => 'nullable|string',
             'telefono' => 'required|string|max:20',
             'email' => 'required|email|unique:businesses,email',
         ]);
 
         if ($validator->fails()) {
-            return response()->json($validator->errors(), 400);
+            return response()->json(['errores' => $validator->errors()], 400);
         }
 
-        $business = Business::create($request->all());
-        return response()->json($business, 201);
+        $business = Business::create($validator->validated());
+
+        return response()->json($business, 201); 
     }
 
-    /**
-     * Display the specified business.
-     */
+
     public function show($id)
     {
-        $business = Business::findOrFail($id);
+        $business = Business::find($id);
+
+        if (!$business) {
+            return response()->json(['error' => 'Negocio no encontrado'], 404);
+        }
+
         return response()->json($business);
     }
 
@@ -51,20 +57,28 @@ class BusinessController extends Controller
      */
     public function update(Request $request, $id)
     {
-        $business = Business::findOrFail($id);
-        
+        $business = Business::find($id);
+
+        if (!$business) {
+            return response()->json(['error' => 'Negocio no encontrado'], 404);
+        }
+
         $validator = Validator::make($request->all(), [
-            'nombre' => 'sometimes|required|string|max:255',
+            'nombre_legal' => 'sometimes|required|string|max:255',
+            'nombre_comercial' => 'sometimes|required|string|max:255',
+            'tipo_identificacion' => 'required|string|max:255',
+            'numero_identificacion' => 'sometimes|required|string|unique:businesses,numero_identificacion,' . $id . ',negocio_id',
+            'margen_ganancia' => 'nullable|numeric',
             'descripcion' => 'nullable|string',
             'telefono' => 'sometimes|required|string|max:20',
             'email' => 'sometimes|required|email|unique:businesses,email,' . $id . ',negocio_id',
         ]);
 
         if ($validator->fails()) {
-            return response()->json($validator->errors(), 400);
+            return response()->json(['errores' => $validator->errors()], 400);
         }
 
-        $business->update($request->all());
+        $business->update($validator->validated());
         return response()->json($business);
     }
 
@@ -73,8 +87,13 @@ class BusinessController extends Controller
      */
     public function destroy($id)
     {
-        $business = Business::findOrFail($id);
+        $business = Business::find($id);
+
+        if (!$business) {
+            return response()->json(['error' => 'Negocio no encontrado'], 404);
+        }
+
         $business->delete();
-        return response()->json(null, 204);
+        return response()->json(['mensaje' => 'Negocio eliminado correctamente'], 204);
     }
 }
