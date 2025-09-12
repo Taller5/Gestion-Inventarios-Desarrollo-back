@@ -10,6 +10,7 @@ use App\Http\Controllers\BranchController;
 use App\Http\Controllers\WarehouseController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\BatchController;
+use App\Http\Controllers\EnumController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();

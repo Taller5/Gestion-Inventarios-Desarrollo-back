@@ -13,7 +13,11 @@ return new class extends Migration
     {
         Schema::create('businesses', function (Blueprint $table) {
             $table->id('negocio_id');
-            $table->string('nombre');
+            $table->string('nombre_legal'); //persona física o persona jurídica 
+            $table->string('nombre_comercial');
+            $table->string('tipo_identificacion');
+            $table->string('numero_identificacion');
+            $table->decimal('margen_ganancia', 5, 2)->nullable();
             $table->text('descripcion')->nullable();
             $table->string('telefono');
             $table->string('email');

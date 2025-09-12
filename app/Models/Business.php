@@ -12,7 +12,11 @@ class Business extends Model
     protected $table = 'businesses';
     protected $primaryKey = 'negocio_id';
     protected $fillable = [
-        'nombre',
+        'nombre_legal',
+        'nombre_comercial',
+        'tipo_identificacion',
+        'numero_identificacion',
+        'margen_ganancia',
         'descripcion',
         'telefono',
         'email',
