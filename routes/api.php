@@ -11,6 +11,7 @@ use App\Http\Controllers\WarehouseController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\BatchController;
 use App\Http\Controllers\EnumController;
+use App\Http\Controllers\InvoiceController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -69,6 +70,12 @@ Route::prefix('v1')->group(function () {
     Route::post('batch', [BatchController::class, 'store']);
     Route::put('batch/{id}', [BatchController::class, 'update']);
     Route::delete('batch/{id}', [BatchController::class, 'destroy']);
+     // ------------------ Invoices ------------------
+    Route::get('invoices', [InvoiceController::class, 'index']);      // List all invoices
+    Route::get('invoices/{id}', [InvoiceController::class, 'show']);  // Show single invoice
+    Route::post('invoices', [InvoiceController::class, 'store']);     // Create invoice
+    Route::put('invoices/{id}', [InvoiceController::class, 'update']); // Update invoice if needed
+    Route::delete('invoices/{id}', [InvoiceController::class, 'destroy']); // Delete invoice
 
 });
 

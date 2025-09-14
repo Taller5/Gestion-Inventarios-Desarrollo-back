@@ -10,3 +10,4 @@ Route::get('/', function () {
 
 Route::resource('users', UserController::class);
 Route::resource('customers', CustomerController::class);
+
