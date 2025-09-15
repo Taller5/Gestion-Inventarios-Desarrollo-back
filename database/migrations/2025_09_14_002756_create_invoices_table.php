@@ -17,8 +17,8 @@ return new class extends Migration
             $table->id();
             
             // Customer info
-            $table->string('customer_name');
-            $table->string('customer_identity_number');
+            $table->string('customer_name')->nullable();
+            $table->string('customer_identity_number')->nullable();
       
 
             // Branch / Business info
