@@ -12,6 +12,7 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\BatchController;
 use App\Http\Controllers\EnumController;
 use App\Http\Controllers\InvoiceController;
+use App\Http\Controllers\CashRegisterController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -76,6 +77,14 @@ Route::prefix('v1')->group(function () {
     Route::post('invoices', [InvoiceController::class, 'store']);     // Create invoice
     Route::put('invoices/{id}', [InvoiceController::class, 'update']); // Update invoice if needed
     Route::delete('invoices/{id}', [InvoiceController::class, 'destroy']); // Delete invoice
+
+
+// ------------------ Cash Registers ------------------
+Route::get('cash-registers', [CashRegisterController::class, 'index']);       // Listar todas las cajas
+Route::get('cash-registers/{id}', [CashRegisterController::class, 'show']);   // Mostrar una caja específica
+Route::post('cash-registers/open', [CashRegisterController::class, 'open']);  // Abrir caja
+Route::post('cash-registers/close/{id}', [CashRegisterController::class, 'close']); // Cerrar caja
+
 
 });
 
