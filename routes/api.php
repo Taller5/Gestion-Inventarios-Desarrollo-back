@@ -13,6 +13,7 @@ use App\Http\Controllers\BatchController;
 use App\Http\Controllers\EnumController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\CashRegisterController;
+use App\Http\Controllers\ProviderController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -78,14 +79,18 @@ Route::prefix('v1')->group(function () {
     Route::put('invoices/{id}', [InvoiceController::class, 'update']); // Update invoice if needed
     Route::delete('invoices/{id}', [InvoiceController::class, 'destroy']); // Delete invoice
 
+    // ------------------ Cash Registers ------------------
+    Route::get('cash-registers', [CashRegisterController::class, 'index']);       // Listar todas las cajas
+    Route::get('cash-registers/{id}', [CashRegisterController::class, 'show']);   // Mostrar una caja específica
+    Route::post('cash-registers/open', [CashRegisterController::class, 'open']);  // Abrir caja
+    Route::post('cash-registers/close/{id}', [CashRegisterController::class, 'close']); // Cerrar caja
 
-// ------------------ Cash Registers ------------------
-Route::get('cash-registers', [CashRegisterController::class, 'index']);       // Listar todas las cajas
-Route::get('cash-registers/{id}', [CashRegisterController::class, 'show']);   // Mostrar una caja específica
-Route::post('cash-registers/open', [CashRegisterController::class, 'open']);  // Abrir caja
-Route::post('cash-registers/close/{id}', [CashRegisterController::class, 'close']); // Cerrar caja
-
-
+    // ------------------ Providers ------------------
+    Route::get('providers', [ProviderController::class, 'index']);       // Listar todos
+    Route::get('providers/{id}', [ProviderController::class, 'show']);   // Mostrar uno
+    Route::post('providers', [ProviderController::class, 'store']);      // Crear
+    Route::put('providers/{id}', [ProviderController::class, 'update']); // Actualizar
+    Route::delete('providers/{id}', [ProviderController::class, 'destroy']); // Eliminar
 });
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');

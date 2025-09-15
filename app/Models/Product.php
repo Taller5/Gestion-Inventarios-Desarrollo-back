@@ -21,4 +21,9 @@ class Product extends Model
     {
     return $this->belongsTo(Warehouse::class, 'bodega_id', 'bodega_id');
     }
+
+     public function providers()
+    {
+        return $this->belongsToMany(Provider::class, 'product_provider');
+    }
 }
