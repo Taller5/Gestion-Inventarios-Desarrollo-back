@@ -64,38 +64,55 @@ class UserController extends Controller
         return view('users.edit', compact('user', 'roles', 'statuses'));
     }
 
-    public function update(Request $request, $id)
-    {
-        $user = User::findOrFail($id);
+public function update(Request $request, $id)
+{
+    $user = User::findOrFail($id);
 
-        $request->validate([
-            'name' => 'required',
-            'phone' => 'nullable',
-            'email' => 'required|email|unique:users,email,' . $user->id,
-            'role' => 'required|in:administrador,supervisor,bodeguero,vendedor',
-            'status' => 'required|in:activo,inactivo',
-            'profile_photo' => 'nullable|string',
-        ]);
+    // Validación básica
+    $rules = [
+        'name' => 'required',
+        'phone' => 'nullable',
+        'email' => 'required|email|unique:users,email,' . $user->id,
+        'role' => 'required|in:administrador,supervisor,bodeguero,vendedor',
+        'status' => 'required|in:activo,inactivo',
+        'profile_photo' => 'nullable|string',
+    ];
 
-        $user->name = $request->name;
-        $user->phone = $request->phone;
-        $user->email = $request->email;
-        $user->role = $request->role;
-        $user->status = $request->status;
-        
-        // Solo actualizar la foto de perfil si se proporciona una nueva
-        if ($request->has('profile_photo') && !empty($request->profile_photo)) {
-            $user->profile_photo = $request->profile_photo;
-        }
-
-        if ($request->filled('password')) {
-            $user->password = Hash::make($request->password);
-        }
-
-        $user->save();
-        return response()->json($user);
-       // return redirect()->route('users.index')->with('success', 'Usuario actualizado correctamente.');
+    // Si el campo password está presente y no vacío, agregamos reglas de validación
+    if ($request->filled('password')) {
+        $rules['password'] = [
+            'min:6',
+            'regex:/[A-Z]/',      // al menos una mayúscula
+            'regex:/[a-z]/',      // al menos una minúscula
+            'regex:/[0-9]/',      // al menos un número
+            'regex:/[\W_]/',      // al menos un caracter especial
+        ];
     }
+
+    $request->validate($rules);
+
+    // Actualizamos datos básicos
+    $user->name = $request->name;
+    $user->phone = $request->phone;
+    $user->email = $request->email;
+    $user->role = $request->role;
+    $user->status = $request->status;
+
+    // Solo actualizar la foto de perfil si se proporciona una nueva
+    if ($request->has('profile_photo') && !empty($request->profile_photo)) {
+        $user->profile_photo = $request->profile_photo;
+    }
+
+    // Solo actualizar la contraseña si fue proporcionada
+    if ($request->filled('password')) {
+        $user->password = Hash::make($request->password);
+    }
+
+    $user->save();
+
+    return response()->json($user);
+}
+
 
     public function destroy($id)
     {
@@ -128,6 +145,7 @@ public function updatePassword(Request $request, $id)
             'regex:/[a-z]/',      // al menos una minúscula
             'regex:/[0-9]/',      // al menos un número
             'regex:/[\W_]/',      // al menos un caracter especial
+            
         ],
     ]);
 
