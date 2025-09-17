@@ -34,7 +34,7 @@ class InvoiceController extends Controller
             'business_legal_name' => 'nullable|string',
             'business_phone' => 'nullable|string',
             'business_email' => 'nullable|string',
-             'branches_phone' => 'nullable|string',
+            'branches_phone' => 'nullable|string',
             'province' => 'nullable|string',
             'canton' => 'nullable|string',
             'business_id_type' => 'nullable|string',
@@ -56,7 +56,7 @@ class InvoiceController extends Controller
             'receipt' => 'nullable|string',
         ]);
 
-        // Calculate totals
+        // Calcular subtotal y total de descuento
         $subtotal = 0;
         $totalDiscount = 0;
 
@@ -65,20 +65,23 @@ class InvoiceController extends Controller
             $totalDiscount += ($p['price'] * $p['quantity'] * ($p['discount'] ?? 0) / 100);
         }
 
-        $total = $subtotal - $totalDiscount;
-        $taxes = 0; // Ajusta si agregas impuestos
+        // Calcular impuestos sobre subtotal - descuento
+        $taxes = ($subtotal - $totalDiscount) * 0.13;
 
-        // Create invoice
+        // Calcular total final
+        $total = $subtotal - $totalDiscount + $taxes;
+
+        // Crear factura
         $invoice = Invoice::create([
             'customer_name' => $data['customer_name'],
             'customer_identity_number' => $data['customer_identity_number'],
-          
+
             'branch_name' => $data['branch_name'],
             'business_name' => $data['business_name'],
             'business_legal_name' => $data['business_legal_name'] ?? null,
             'business_phone' => $data['business_phone'] ?? null,
             'business_email' => $data['business_email'] ?? null,
-            'branches_phone' => $data['business_phone'] ?? null,
+            'branches_phone' => $data['branches_phone'] ?? null,
             'province' => $data['province'] ?? null,
             'canton' => $data['canton'] ?? null,
             'business_id_type' => $data['business_id_type'] ?? null,
