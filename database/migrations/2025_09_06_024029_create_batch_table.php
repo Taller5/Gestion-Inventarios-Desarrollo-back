@@ -13,18 +13,18 @@ return new class extends Migration
     {
         Schema::create('batch', function (Blueprint $table) {
             $table->id('lote_id');
-            $table->string('codigo'); // Relaciona con productos.codigo
+            $table->string('codigo_producto'); // Relaciona con productos.codigo_producto
             $table->string('numero_lote');
             $table->unsignedInteger('cantidad');
             $table->string('proveedor');
             $table->date('fecha_entrada');
-            $table->date('fecha_salida');
+            $table->date('fecha_vencimiento')->nullable();
             $table->date('fecha_salida_lote')->nullable();
             $table->text('descripcion')->nullable();
             $table->string('nombre');
             $table->timestamps();
 
-            $table->foreign('codigo')->references('codigo')->on('products')->onDelete('cascade');
+            $table->foreign('codigo_producto')->references('codigo_producto')->on('products')->onDelete('cascade');
         });
     }
 

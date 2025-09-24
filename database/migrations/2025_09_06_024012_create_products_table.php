@@ -13,10 +13,13 @@ return new class extends Migration
     {
          Schema::create('products', function (Blueprint $table) {
             $table->id();
-            $table->string('codigo')->unique();
-            $table->string('nombre');
+            $table->string('codigo_producto')->unique();
+            $table->string('nombre_producto');
+            $table->string('categoria');
+            $table->text('descripcion')->nullable();
             $table->unsignedInteger('stock')->default(0);
-            $table->decimal('precio', 10, 2);
+            $table->decimal('precio_compra', 10, 2);
+            $table->decimal('precio_venta', 10, 2);
             $table->foreignId('bodega_id')->constrained('warehouses', 'bodega_id');
             $table->timestamps();
         });

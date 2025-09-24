@@ -24,10 +24,13 @@ class ProductController extends Controller
    public function store(Request $request)
 {
     $data = $request->validate([
-        'codigo' => 'required|unique:products,codigo',
-        'nombre' => 'required',
+        'codigo_producto' => 'required|unique:products,codigo_producto',
+        'nombre_producto' => 'required',
+        'categoria' => 'required|string',
+        'descripcion' => 'nullable',
         'stock' => 'required|integer|min:0',
-        'precio' => 'required|numeric|min:0',
+        'precio_compra' => 'required|numeric|min:0',
+        'precio_venta' => 'required|numeric|min:0',
         'bodega_id' => 'required|exists:warehouses,bodega_id',
     ]);
 
@@ -42,9 +45,12 @@ class ProductController extends Controller
     {
         $product = Product::findOrFail($id);
         $data = $request->validate([
-            'nombre' => 'sometimes|required',
+            'nombre_producto' => 'sometimes|required',
+            'categoria' => 'sometimes|required|string',
+            'descripcion' => 'nullable',
             'stock' => 'sometimes|required|integer|min:0',
-            'precio' => 'sometimes|required|numeric|min:0',
+            'precio_compra' => 'sometimes|required|numeric|min:0',
+            'precio_venta' => 'sometimes|required|numeric|min:0',
             'bodega_id' => 'sometimes|required|exists:warehouses,bodega_id',
         ]);
         $product->update($data);

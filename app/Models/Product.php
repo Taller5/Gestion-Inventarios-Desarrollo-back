@@ -10,11 +10,11 @@ class Product extends Model
 {
     protected $table = 'products';
     protected $primaryKey = 'id';
-     protected $fillable = ['codigo', 'nombre', 'stock', 'precio', 'bodega_id'];
+    protected $fillable = ['codigo_producto', 'nombre_producto', 'categoria', 'descripcion', 'stock', 'precio_compra', 'precio_venta', 'bodega_id'];
 
     public function lotes(): HasMany
     {
-        return $this->hasMany(Batch::class, 'codigo', 'codigo');
+        return $this->hasMany(Batch::class, 'codigo_producto', 'codigo_producto');
     }
 
     public function bodega(): BelongsTo
