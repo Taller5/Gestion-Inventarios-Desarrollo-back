@@ -24,12 +24,12 @@ class BatchController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'codigo' => 'required|exists:products,codigo',
+            'codigo_producto' => 'required|exists:products,codigo_producto',
             'numero_lote' => 'required',
             'cantidad' => 'required|integer|min:0',
             'proveedor' => 'required',
             'fecha_entrada' => 'required|date',
-            'fecha_salida' => 'required|date',
+            'fecha_vencimiento' => 'required|date',
             'fecha_salida_lote' => 'nullable|date',
             'descripcion' => 'nullable',
             'nombre' => 'required'
@@ -38,7 +38,7 @@ class BatchController extends Controller
         $lote = Batch::create($data);
 
         // Actualizar stock del producto
-        $producto = Product::where('codigo', $data['codigo'])->first();
+        $producto = Product::where('codigo_producto', $data['codigo_producto'])->first();
         if ($producto) {
             $producto->stock += $data['cantidad'];
             $producto->save();
@@ -56,13 +56,13 @@ class BatchController extends Controller
             'cantidad' => 'sometimes|required|integer|min:0',
             'proveedor' => 'sometimes|required',
             'fecha_entrada' => 'sometimes|required|date',
-            'fecha_salida' => 'sometimes|required|date',
+            'fecha_vencimiento' => 'sometimes|required|date',
             'fecha_salida_lote' => 'nullable|date',
             'descripcion' => 'nullable',
             'nombre' => 'sometimes|required'
         ]);
 
-        $producto = Product::where('codigo', $lote->codigo)->first();
+    $producto = Product::where('codigo_producto', $lote->codigo_producto)->first();
 
         if ($producto && isset($data['cantidad'])) {
             // Guardar cantidad vieja
@@ -83,7 +83,7 @@ class BatchController extends Controller
         $lote = Batch::findOrFail($id);
 
         // Reducir stock del producto
-        $producto = Product::where('codigo', $lote->codigo)->first();
+    $producto = Product::where('codigo_producto', $lote->codigo_producto)->first();
         if ($producto) {
             $producto->stock -= $lote->cantidad;
             if ($producto->stock < 0) $producto->stock = 0;
