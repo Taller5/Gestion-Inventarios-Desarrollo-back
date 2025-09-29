@@ -16,18 +16,7 @@ class CashRegisterController extends Controller
             'opening_amount' => 'required|numeric|min:0',
         ]);
 
-        // Verificar si ya hay una caja abierta para la sucursal
-        $existing = CashRegister::where('sucursal_id', $validated['sucursal_id'])
-            ->whereNull('closed_at')
-            ->first();
-
-        if ($existing) {
-            return response()->json([
-                'message' => 'Ya existe una caja abierta para esta sucursal.',
-                'data' => $existing->load(['branch', 'user'])
-            ], 400);
-        }
-
+        // Crear caja sin limitar a una por sucursal
         $register = CashRegister::create([
             'sucursal_id' => $validated['sucursal_id'],
             'user_id' => $validated['user_id'],
