@@ -1,54 +1,34 @@
 {
   "version": 2,
-  "functions": {
-    "api/index.php": {
-      "runtime": "vercel-php@0.7.3"
+
+  "headers": [
+    {
+      "source": "/api/(.*)",
+      "headers": [
+        {
+          "key": "Access-Control-Allow-Origin",
+          "value": "*"
+        },
+        {
+          "key": "Access-Control-Allow-Methods",
+          "value": "GET, POST, PUT, DELETE, OPTIONS"
+        },
+        {
+          "key": "Access-Control-Allow-Headers",
+          "value": "Content-Type, Authorization, X-Requested-With, Accept"
+        }
+      ]
     }
-  },
-  "routes": [
+  ],
+
+  "rewrites": [
     {
-      "src": "/api/index.php",
-      "methods": ["OPTIONS"],
-      "headers": {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization"
-      },
-      "status": 204
+      "source": "/build/assets/(.*)",
+      "destination": "/build/assets/$1"
     },
     {
-      "src": "/api/.*",
-      "methods": ["OPTIONS"],
-      "headers": {
-        "Access-Control-Allow-Origin": "*",
-        "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
-        "Access-Control-Allow-Headers": "Content-Type, Authorization"
-      },
-      "status": 204
-    },
-    {
-      "src": "/build/assets/(.*)",
-      "dest": "/build/assets/$1"
-    },
-    {
-      "src": "/images/(.*)",
-      "dest": "/public/images/$1"
-    },
-    {
-      "src": "/api/(.*\\.php)$",
-      "dest": "/api/$1"
-    },
-    {
-      "src": "/api/(.*)$",
-      "dest": "/api/index.php"
-    },
-    {
-      "src": "/(.*\\.php)$",
-      "dest": "/api/$1"
-    },
-    {
-      "src": "/(.*)$",
-      "dest": "/api/index.php"
+      "source": "/api/(.*)",
+      "destination": "/api/index.php"
     }
   ]
 }
