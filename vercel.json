@@ -1,6 +1,6 @@
 {
   "version": 2,
-
+  
   "headers": [
     {
       "source": "/api/(.*)",
@@ -20,15 +20,17 @@
       ]
     }
   ],
-
-  "rewrites": [
+  
+  "routes": [
     {
-      "source": "/build/assets/(.*)",
-      "destination": "/build/assets/$1"
+      "src": "/build/assets/(.*)",
+      "dest": "/build/assets/$1"
     },
+    
     {
-      "source": "/api/(.*)",
-      "destination": "/api/index.php"
+      "src": "/api/(.*)$",
+      "dest": "/api/index.php"
     }
+    
   ]
 }
