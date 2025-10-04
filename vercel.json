@@ -1,13 +1,13 @@
 {
   "version": 2,
-  
+
   "headers": [
     {
       "source": "/api/(.*)",
       "headers": [
         {
           "key": "Access-Control-Allow-Origin",
-          "value": "https://gestion-inventarios-desarrollo-fron-rosy.vercel.app"
+          "value": "*"
         },
         {
           "key": "Access-Control-Allow-Methods",
@@ -20,17 +20,15 @@
       ]
     }
   ],
-  
-  "routes": [
+
+  "rewrites": [
     {
-      "src": "/build/assets/(.*)",
-      "dest": "/build/assets/$1"
+      "source": "/build/assets/(.*)",
+      "destination": "/build/assets/$1"
     },
-    
     {
-      "src": "/api/(.*)$",
-      "dest": "/api/index.php"
+      "source": "/api/(.*)",
+      "destination": "/api/index.php"
     }
-    
   ]
 }
