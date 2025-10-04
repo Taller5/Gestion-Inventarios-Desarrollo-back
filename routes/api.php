@@ -14,6 +14,7 @@ use App\Http\Controllers\EnumController;
 use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\CashRegisterController;
 use App\Http\Controllers\ProviderController;
+use App\Http\Controllers\CategoryController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -91,6 +92,13 @@ Route::prefix('v1')->group(function () {
     Route::post('providers', [ProviderController::class, 'store']);      // Crear
     Route::put('providers/{id}', [ProviderController::class, 'update']); // Actualizar
     Route::delete('providers/{id}', [ProviderController::class, 'destroy']); // Eliminar
+
+      Route::get('/categories', [CategoryController::class, 'index']);       // Listar todas
+    Route::get('/categories/{nombre}', [CategoryController::class, 'show']); // Ver categoría por nombre
+    Route::post('/categories', [CategoryController::class, 'store']);      // Crear categoría
+    Route::put('/categories/{nombre}', [CategoryController::class, 'update']); // Actualizar categoría
+    Route::delete('/categories/{nombre}', [CategoryController::class, 'destroy']); // Eliminar
 });
+
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
