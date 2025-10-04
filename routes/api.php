@@ -102,3 +102,10 @@ Route::prefix('v1')->group(function () {
 
 
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1');
+
+Route::options('/{any}', function (Request $request) {
+    return response('', 204)
+        ->header('Access-Control-Allow-Origin', '*') // o 'http://localhost:5173' si querés más restricción
+        ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+        ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+})->where('any', '.*');
