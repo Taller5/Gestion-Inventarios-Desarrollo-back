@@ -10,7 +10,7 @@
       "src": "/api/.*",
       "methods": ["OPTIONS"],
       "headers": {
-        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Origin": "http://localhost:5173",
         "Access-Control-Allow-Methods": "GET,POST,PUT,DELETE,OPTIONS",
         "Access-Control-Allow-Headers": "Content-Type, Authorization"
       },
@@ -25,11 +25,19 @@
       "dest": "/public/images/$1"
     },
     {
-      "src": "/(.*\\.php)",
+      "src": "/api/(.*\\.php)$",
       "dest": "/api/$1"
     },
     {
-      "src": "/(.*)",
+      "src": "/api/(.*)$",
+      "dest": "/api/index.php"
+    },
+    {
+      "src": "/(.*\\.php)$",
+      "dest": "/api/$1"
+    },
+    {
+      "src": "/(.*)$",
       "dest": "/api/index.php"
     }
   ]
