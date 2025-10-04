@@ -30,7 +30,7 @@ Route::prefix('v1')->group(function () {
     Route::post('employees', [UserController::class, 'store']);
     Route::put('employees/{id}', [UserController::class, 'update']);
     Route::delete('employees/{id}', [UserController::class, 'destroy']); 
-    Route::post('/recover-password', [AuthController::class, 'recoverPassword']);
+    Route::post('employees/recover-password', [UserController::class, 'recoverPassword']);
 
      // ------------------ Customers ------------------
     Route::get('customers', [CustomerController::class, 'index']);       // Listar todos
