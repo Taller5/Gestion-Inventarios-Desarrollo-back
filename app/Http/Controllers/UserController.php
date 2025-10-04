@@ -164,19 +164,15 @@ public function updateProfilePhoto(Request $request, $id)
     $user = User::findOrFail($id);
 
     $request->validate([
-        'profile_photo' => 'required|image|mimes:jpg,jpeg,png|max:2048',
+        'profile_photo' => 'required|url',
     ]);
 
-    if ($request->hasFile('profile_photo')) {
-        $file = $request->file('profile_photo');
-        $filename = uniqid() . '.' . $file->getClientOriginalExtension();
-        $file->move(public_path('profile_photos'), $filename);
-        $user->profile_photo = 'profile_photos/' . $filename;
-        $user->save();
-    }
+    $user->profile_photo = $request->input('profile_photo');
+    $user->save();
 
     return response()->json(['message' => 'Foto de perfil actualizada', 'profile_photo' => $user->profile_photo]);
 }
+
 public function recoverPassword(Request $request)
     {
         $request->validate([
