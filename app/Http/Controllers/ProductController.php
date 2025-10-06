@@ -23,21 +23,36 @@ class ProductController extends Controller
 
    public function store(Request $request)
 {
-    $data = $request->validate([
-        'codigo_producto' => 'required|unique:products,codigo_producto',
-        'nombre_producto' => 'required',
-        'categoria' => 'required|string',
-        'descripcion' => 'nullable',
-        'stock' => 'required|integer|min:0',
-        'precio_compra' => 'required|numeric|min:0',
-        'precio_venta' => 'required|numeric|min:0',
-        'bodega_id' => 'required|exists:warehouses,bodega_id',
-    ]);
+    try {
+        $data = $request->validate([
+            'codigo_producto' => 'required|unique:products,codigo_producto',
+            'nombre_producto' => 'required',
+            'categoria' => 'required|string',
+            'descripcion' => 'nullable',
+            'stock' => 'required|integer|min:0',
+            'precio_compra' => 'required|numeric|min:0',
+            'precio_venta' => 'required|numeric|min:0',
+            'bodega_id' => 'required|exists:warehouses,bodega_id',
+        ]);
 
-    $product = Product::create($data);
-    $product->load('bodega', 'lotes');
+        $product = Product::create($data);
+        $product->load('bodega', 'lotes');
 
-    return response()->json($product, 201);
+        return response()->json($product, 201);
+
+    } catch (\Illuminate\Validation\ValidationException $e) {
+        // Si es un error de validación, devolver un mensaje claro
+        return response()->json([
+            'error' => true,
+            'message' => $e->validator->errors()->first(), // primer error de validación
+        ], 422);
+    } catch (\Exception $e) {
+        // Para cualquier otro error
+        return response()->json([
+            'error' => true,
+            'message' => 'Ocurrió un error al guardar el producto.',
+        ], 500);
+    }
 }
 
 
