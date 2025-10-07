@@ -11,7 +11,6 @@ class ProductsTableSeeder extends Seeder
 {
     public function run(): void
     {
-        // Obtener categorías y bodegas existentes
         $categories = Category::pluck('nombre')->toArray();
         $warehouses = Warehouse::pluck('bodega_id')->toArray();
 
@@ -20,55 +19,92 @@ class ProductsTableSeeder extends Seeder
             return;
         }
 
-        $total = 5000; // cantidad de productos
-        $batchSize = 500; // insert por batch para no saturar memoria
+        $total = 2000;
+        $batchSize = 500;
         $productsBatch = [];
+        $nombresUsados = [];
 
-        // Lista de nombres realistas por categoría
+        // Lista base de productos por categoría
         $productosPorCategoria = [
-            "Accesorios" => ["Bolsos de cuero", "Reloj de pulsera", "Collar de plata", "Cartera de mujer"],
-            "Automotriz" => ["Aceite de motor 5W30", "Limpiaparabrisas", "Batería 12V", "Filtro de aire"],
-            "Bebidas" => ["Jugo de naranja", "Coca-Cola 500ml", "Agua mineral", "Cerveza artesanal"],
-            "Calzado" => ["Zapatillas deportivas", "Botas de cuero", "Sandalias", "Zapatos formales"],
-            "Carnes y Pescados" => ["Pechuga de pollo", "Carne de res", "Salmón fresco", "Cerdo ahumado"],
-            "Cocina y Utensilios" => ["Sartén antiadherente", "Olla a presión", "Cuchillo chef", "Batidora eléctrica"],
-            "Cuidado Personal" => ["Shampoo hidratante", "Jabón de glicerina", "Crema facial", "Cepillo de dientes eléctrico"],
-            "Deportes y Aire Libre" => ["Balón de fútbol", "Raqueta de tenis", "Casco ciclismo", "Mochila senderismo"],
-            "Ferretería" => ["Martillo", "Taladro eléctrico", "Pintura acrílica", "Tornillos variados"],
-            "Frutas y Verduras" => ["Manzana roja", "Banana", "Lechuga", "Tomate cherry"],
-            "Juguetes" => ["Rompecabezas 100 piezas", "Muñeca articulada", "Set de LEGO", "Carrito a control remoto"],
-            "Lácteos y Huevos" => ["Leche entera 1L", "Queso fresco", "Yogur natural", "Huevos de granja"],
-            "Libros y Papelería" => ["Cuaderno universitario", "Bolígrafo azul", "Lápices de colores", "Agenda 2025"],
-            "Limpieza del Hogar" => ["Detergente líquido", "Limpiador multiusos", "Esponja para platos", "Desinfectante en spray"],
+            "Accesorios" => ["Bolso", "Reloj", "Collar", "Cartera"],
+            "Automotriz" => ["Aceite de motor", "Limpiaparabrisas", "Batería", "Filtro de aire"],
+            "Bebidas" => ["Jugo", "Refresco", "Agua mineral", "Cerveza"],
+            "Calzado" => ["Zapatillas", "Botas", "Sandalias", "Zapatos"],
+            "Carnes y Pescados" => ["Pechuga de pollo", "Carne de res", "Salmón", "Cerdo"],
+            "Cocina y Utensilios" => ["Sartén", "Olla", "Cuchillo", "Batidora"],
+            "Cuidado Personal" => ["Shampoo", "Jabón", "Crema", "Cepillo de dientes"],
+            "Deportes y Aire Libre" => ["Balón", "Raqueta", "Casco", "Mochila"],
+            "Ferretería" => ["Martillo", "Taladro", "Pintura", "Tornillos"],
+            "Frutas y Verduras" => ["Manzana", "Banano", "Lechuga", "Tomate"],
+            "Juguetes" => ["Rompecabezas", "Muñeca", "Set de LEGO", "Carrito"],
+            "Lácteos y Huevos" => ["Leche", "Queso fresco", "Yogur", "Huevos"],
+            "Libros y Papelería" => ["Cuaderno", "Bolígrafo", "Lápices", "Agenda"],
+            "Limpieza del Hogar" => ["Detergente", "Limpiador", "Esponja", "Desinfectante"],
             "Mascotas" => ["Comida para perros", "Arena para gatos", "Juguete para gatos", "Collar antipulgas"],
-            "Medicamentos" => ["Paracetamol 500mg", "Ibuprofeno 200mg", "Jarabe para la tos", "Vitamina C 1000mg"],
-            "Panadería y Pastelería" => ["Pan integral", "Croissant", "Bollos de canela", "Pastel de chocolate"],
-            "Ropa" => ["Camiseta algodón", "Pantalón jean", "Sudadera con capucha", "Vestido de verano"],
-            "Snacks y Dulces" => ["Chocolate amargo", "Galletas de avena", "Papas fritas", "Caramelos surtidos"],
-            "Electrodomésticos" => ["Refrigerador 300L", "Microondas 20L", "Lavadora automática", "Licuadora de vaso"],
-            "Electrónica" => ["Smartphone 128GB", "Laptop 16GB RAM", "Televisor 50 pulgadas", "Auriculares bluetooth"],
+            "Medicamentos" => ["Paracetamol", "Ibuprofeno", "Jarabe", "Vitamina C"],
+            "Panadería y Pastelería" => ["Pan", "Croissant", "Bollo", "Pastel"],
+            "Ropa" => ["Camiseta", "Pantalón", "Sudadera", "Vestido"],
+            "Snacks y Dulces" => ["Chocolate", "Galletas", "Papas fritas", "Caramelos"],
+            "Electrodomésticos" => ["Refrigerador", "Microondas", "Lavadora", "Licuadora"],
+            "Electrónica" => ["Smartphone", "Laptop", "Televisor", "Auriculares"],
         ];
 
-        for ($i = 1; $i <= $total; $i++) {
+        $rangosPorCategoria = [
+            "Accesorios" => [5000, 30000],
+            "Automotriz" => [3000, 80000],
+            "Bebidas" => [500, 3000],
+            "Calzado" => [15000, 60000],
+            "Carnes y Pescados" => [2500, 12000],
+            "Cocina y Utensilios" => [4000, 50000],
+            "Cuidado Personal" => [1000, 20000],
+            "Deportes y Aire Libre" => [5000, 80000],
+            "Ferretería" => [1000, 70000],
+            "Frutas y Verduras" => [500, 4000],
+            "Juguetes" => [3000, 40000],
+            "Lácteos y Huevos" => [800, 6000],
+            "Libros y Papelería" => [500, 15000],
+            "Limpieza del Hogar" => [1000, 8000],
+            "Mascotas" => [2000, 25000],
+            "Medicamentos" => [800, 20000],
+            "Panadería y Pastelería" => [500, 8000],
+            "Ropa" => [8000, 50000],
+            "Snacks y Dulces" => [500, 5000],
+            "Electrodomésticos" => [20000, 250000],
+            "Electrónica" => [15000, 400000],
+        ];
 
-            // Seleccionar categoría y bodega aleatoria
+        // Variaciones para generar nombres únicos
+        $marcas = ["Tico", "Premium", "Del Valle", "Global", "Eco", "Max", "Ultra", "Selecta", "San José", "CR", "Nature", "Smart"];
+        $presentaciones = ["500ml", "1L", "2L", "kg", "250g", "Caja", "Pack", "Bolsa", "Unidad", "Edición especial"];
+
+        for ($i = 1; $i <= $total; $i++) {
             $categoria = $categories[array_rand($categories)];
             $bodega = $warehouses[array_rand($warehouses)];
 
-            // Nombre de producto realista según categoría
-            $nombreOpciones = $productosPorCategoria[$categoria] ?? ["Producto genérico"];
-            $nombre = $nombreOpciones[array_rand($nombreOpciones)];
+            $base = $productosPorCategoria[$categoria][array_rand($productosPorCategoria[$categoria])];
+            $marca = $marcas[array_rand($marcas)];
+            $presentacion = $presentaciones[array_rand($presentaciones)];
 
-            // Código único
-            $codigo = strtoupper(substr(preg_replace('/[^A-Za-z0-9]/', '', $nombre), 0, 3))
-                      . str_pad($i, 6, '0', STR_PAD_LEFT);
+            $nombre = "$base $marca $presentacion";
 
-            // Descripción simple
-            $descripcion = "Producto de la categoría $categoria";
+            // Asegurar que el nombre no se repita
+            while (isset($nombresUsados[$nombre])) {
+                $marca = $marcas[array_rand($marcas)];
+                $presentacion = $presentaciones[array_rand($presentaciones)];
+                $nombre = "$base $marca $presentacion";
+            }
+            $nombresUsados[$nombre] = true;
+
+            $codigo = strtoupper(substr(preg_replace('/[^A-Za-z0-9]/', '', $base), 0, 3))
+                    . str_pad($i, 6, '0', STR_PAD_LEFT);
+
+            $descripcion = "Producto de la categoría $categoria.";
 
             $stock = rand(0, 500);
-            $precio_compra = round(rand(100, 10000) / 100, 2); // entre 1.00 y 100.00
-            $precio_venta = round($precio_compra * rand(120, 200) / 100, 2); // +20% a +100%
+
+            [$min, $max] = $rangosPorCategoria[$categoria];
+            $precio_compra = rand($min, $max);
+            $precio_venta = round($precio_compra * rand(115, 180) / 100);
 
             $productsBatch[] = [
                 'codigo_producto' => $codigo,
@@ -83,7 +119,6 @@ class ProductsTableSeeder extends Seeder
                 'updated_at'      => now(),
             ];
 
-            // Insertar en batch
             if (count($productsBatch) >= $batchSize) {
                 Product::insert($productsBatch);
                 $productsBatch = [];
@@ -91,11 +126,10 @@ class ProductsTableSeeder extends Seeder
             }
         }
 
-        // Insertar últimos productos
         if (!empty($productsBatch)) {
             Product::insert($productsBatch);
         }
 
-        $this->command->info("Seeder completado: $total productos insertados.");
+        $this->command->info("Seeder completado: $total productos únicos insertados.");
     }
 }
