@@ -16,6 +16,7 @@ class Business extends Model
         'nombre_comercial',
         'tipo_identificacion',
         'numero_identificacion',
+        'codigo_actividad_emisor',
         'margen_ganancia',
         'descripcion',
         'telefono',

@@ -16,6 +16,9 @@ return new class extends Migration
             $table->string('codigo_producto')->unique();
             $table->string('nombre_producto');
             $table->string('categoria');
+            $table->string('codigo_cabys', 13)->nullable()->index();
+            $table->decimal('impuesto', 5, 2)->nullable();
+            $table->foreignId('unit_id')->nullable()->constrained('units')->nullOnDelete(); // Unidad de medida (FK)
             $table->text('descripcion')->nullable();
             $table->unsignedInteger('stock')->default(0);
             $table->decimal('precio_compra', 10, 2);

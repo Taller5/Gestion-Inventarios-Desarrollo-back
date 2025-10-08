@@ -11,13 +11,13 @@ class ProductController extends Controller
     {
         // Devuelve todos los productos con su bodega y lotes
         return response()->json(
-            Product::with('bodega', 'lotes')->get()
+            Product::with('bodega', 'lotes', 'unit')->get()
         );
     }
 
     public function show($id)
     {
-        $product = Product::with('bodega', 'lotes')->findOrFail($id);
+        $product = Product::with('bodega', 'lotes', 'unit')->findOrFail($id);
         return response()->json($product);
     }
 
@@ -29,6 +29,9 @@ class ProductController extends Controller
             'nombre_producto' => 'required',
             'categoria' => 'required|string',
             'descripcion' => 'nullable',
+            'codigo_cabys' => 'nullable|string|max:13',
+            'impuesto' => 'nullable|numeric|min:0|max:100',
+            'unit_id' => 'nullable|exists:units,id',
             'stock' => 'required|integer|min:0',
             'precio_compra' => 'required|numeric|min:0',
             'precio_venta' => 'required|numeric|min:0',
@@ -36,7 +39,7 @@ class ProductController extends Controller
         ]);
 
         $product = Product::create($data);
-        $product->load('bodega', 'lotes');
+        $product->load('bodega', 'lotes', 'unit'); 
 
         return response()->json($product, 201);
 
@@ -63,12 +66,16 @@ class ProductController extends Controller
             'nombre_producto' => 'sometimes|required',
             'categoria' => 'sometimes|required|string',
             'descripcion' => 'nullable',
+            'codigo_cabys' => 'nullable|string|max:13',
+            'impuesto' => 'nullable|numeric|min:0|max:100',
+            'unit_id' => 'nullable|exists:units,id',
             'stock' => 'sometimes|required|integer|min:0',
             'precio_compra' => 'sometimes|required|numeric|min:0',
             'precio_venta' => 'sometimes|required|numeric|min:0',
             'bodega_id' => 'sometimes|required|exists:warehouses,bodega_id',
         ]);
         $product->update($data);
+         $product->load('bodega','lotes','unit');
         return response()->json($product);
     }
 
