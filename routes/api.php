@@ -15,6 +15,8 @@ use App\Http\Controllers\InvoiceController;
 use App\Http\Controllers\CashRegisterController;
 use App\Http\Controllers\ProviderController;
 use App\Http\Controllers\CategoryController;
+use App\Http\Controllers\CabysController;
+use App\Http\Controllers\UnitController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -93,11 +95,20 @@ Route::prefix('v1')->group(function () {
     Route::put('providers/{id}', [ProviderController::class, 'update']); // Actualizar
     Route::delete('providers/{id}', [ProviderController::class, 'destroy']); // Eliminar
 
-      Route::get('/categories', [CategoryController::class, 'index']);       // Listar todas
+    // ------------------ Categories ------------------
+    Route::get('/categories', [CategoryController::class, 'index']);       // Listar todas
     Route::get('/categories/{nombre}', [CategoryController::class, 'show']); // Ver categoría por nombre
     Route::post('/categories', [CategoryController::class, 'store']);      // Crear categoría
     Route::put('/categories/{nombre}', [CategoryController::class, 'update']); // Actualizar categoría
     Route::delete('/categories/{nombre}', [CategoryController::class, 'destroy']); // Eliminar
+
+        // ------------------ CABYS ------------------
+    Route::get('cabys', [CabysController::class, 'index']); 
+    Route::get('cabys/{code}', [CabysController::class, 'show']); 
+    Route::get('cabys-categories', [CabysController::class, 'categories']);
+
+    // ------------------ Units (Unidades de medida) ------------------
+    Route::get('units', [UnitController::class, 'index']);     
 });
 
 

@@ -10,7 +10,18 @@ class Product extends Model
 {
     protected $table = 'products';
     protected $primaryKey = 'id';
-    protected $fillable = ['codigo_producto', 'nombre_producto', 'categoria', 'descripcion', 'stock', 'precio_compra', 'precio_venta', 'bodega_id'];
+    protected $fillable = [
+        'codigo_producto', 
+        'nombre_producto', 
+        'categoria', 
+        'codigo_cabys', 
+        'impuesto', 
+        'unit_id', 
+        'descripcion', 
+        'stock', 
+        'precio_compra', 
+        'precio_venta', 
+        'bodega_id'];
 
     public function lotes(): HasMany
     {
@@ -25,5 +36,10 @@ class Product extends Model
      public function providers()
     {
         return $this->belongsToMany(Provider::class, 'product_provider');
+    }
+    
+     public function unit(): BelongsTo
+    {
+        return $this->belongsTo(Unit::class, 'unit_id');
     }
 }

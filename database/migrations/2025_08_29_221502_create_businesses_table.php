@@ -17,6 +17,7 @@ return new class extends Migration
             $table->string('nombre_comercial');
             $table->string('tipo_identificacion');
             $table->string('numero_identificacion');
+            $table->char('codigo_actividad_emisor', 6);
             $table->decimal('margen_ganancia', 5, 2)->nullable();
             $table->text('descripcion')->nullable();
             $table->string('telefono');
