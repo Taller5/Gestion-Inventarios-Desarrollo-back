@@ -81,6 +81,12 @@ Route::prefix('v1')->group(function () {
     Route::post('invoices', [InvoiceController::class, 'store']);     // Create invoice
     Route::put('invoices/{id}', [InvoiceController::class, 'update']); // Update invoice if needed
     Route::delete('invoices/{id}', [InvoiceController::class, 'destroy']); // Delete invoice
+    Route::get('invoices/{id}/xml', [InvoiceController::class, 'xml']); // Obtener XML de factura electrónica
+    Route::get('invoices/{id}/xml-status', [InvoiceController::class, 'xmlStatus']); // Estado de validación/firma del XML
+    Route::post('invoices/{id}/submit', [InvoiceController::class, 'submit']);// Enviar a Hacienda
+    Route::get('invoices/{id}/status', [InvoiceController::class, 'status']);// Estado en Hacienda
+    Route::get('invoices/{id}/response-xml', [InvoiceController::class, 'responseXml']);// Obtener XML de respuesta de Hacienda
+    Route::get('invoices/{id}/validate-xml', [InvoiceController::class, 'validateXml']); // Validar XML contra XSD
 
     // ------------------ Cash Registers ------------------
     Route::get('cash-registers', [CashRegisterController::class, 'index']);       // Listar todas las cajas

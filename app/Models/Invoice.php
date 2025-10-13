@@ -16,7 +16,7 @@ class Invoice extends Model
         'branch_name',
         'business_name',
         'business_legal_name',
-       'branches_phone',
+        'branches_phone',
         'business_phone',
         'business_email',
         'province',
@@ -27,6 +27,7 @@ class Invoice extends Model
         // Cashier and date
         'cashier_name',
         'date',
+        'document_type',
 
         // Products and totals
         'products', // JSON
@@ -45,4 +46,20 @@ class Invoice extends Model
         'products' => 'array',
         'date' => 'datetime',
     ];
+
+     public function xmls()
+    {
+        return $this->hasMany(InvoiceXml::class);
+    }
+
+    public function responses()
+    {
+        return $this->hasMany(HaciendaResponse::class);
+    }
+
+    // Relación con items (detalle de líneas snapshot)
+    public function items()
+    {
+        return $this->hasMany(InvoiceItem::class);
+    }
 }
