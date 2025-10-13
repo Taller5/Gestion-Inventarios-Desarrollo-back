@@ -4,9 +4,28 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Invoice;
+use App\Services\FacturaElectronicaXmlService;
 
 class InvoiceController extends Controller
 {
+       // Endpoint para validar el XML de una factura contra el XSD
+    public function validateXml($id)
+    {
+        $invoice = \App\Models\Invoice::findOrFail($id);
+        $xmlService = new \App\Services\FacturaElectronicaXmlService();
+        $validator = new \App\Services\XmlValidatorService();
+        $xml = $xmlService->generarXml($invoice);
+        // Ruta absoluta al XSD (ajusta si es necesario)
+        $xsdPath = base_path('TiqueteElectronico_V4.4.xsd');
+        if (!file_exists($xsdPath)) {
+            return response()->json(['error' => 'No se encontró el archivo XSD en ' . $xsdPath], 500);
+        }
+        list($isValid, $errors) = $validator->validateXmlAgainstXsd($xml, $xsdPath);
+        return response()->json([
+            'is_valid' => $isValid,
+            'errors' => $errors,
+        ]);
+    }
     // List all invoices
     public function index()
     {
@@ -20,13 +39,187 @@ class InvoiceController extends Controller
         return response()->json($invoice);
     }
 
-    // Create a new invoice
+        // Enviar el último XML generado a Hacienda
+    public function submit($id)
+    {
+        $invoice = Invoice::findOrFail($id);
+        $xmlRecord = $invoice->xmls()->latest('id')->first();
+        if (!$xmlRecord) return response()->json(['error' => 'No hay XML generado para esta factura'], 400);
+
+        try {
+            $svc = new \App\Services\HaciendaRecepcionService();
+            $resp = $svc->submit($invoice, $xmlRecord);
+            $xmlRecord->update(['status' => 'submitted', 'submitted_at' => now()]);
+            return response()->json(['ok' => true, 'response' => $resp]);
+        } catch (\Throwable $e) {
+            $errorMsg = $e->getMessage();
+            $errorBody = null;
+            if ($e instanceof \GuzzleHttp\Exception\BadResponseException && $e->hasResponse()) {
+                $errorBody = (string) $e->getResponse()->getBody();
+            }
+            $xmlRecord->update(['status' => 'error', 'error_message' => $errorMsg . ($errorBody ? (' | ' . $errorBody) : '')]);
+            $payload = ['ok' => false, 'error' => $errorMsg];
+            if ($errorBody) {
+                $decoded = json_decode($errorBody, true);
+                $payload['hacienda'] = $decoded ?: $errorBody;
+            }
+            return response()->json($payload, 500);
+        }
+    }
+
+    // Consultar estado en Hacienda por clave (usa la más reciente si no se envía)
+    public function status($id)
+    {
+        $invoice = Invoice::findOrFail($id);
+        $xmlRecord = $invoice->xmls()->latest('id')->first();
+        if (!$xmlRecord || !$xmlRecord->clave) return response()->json(['error' => 'No hay clave asociada a esta factura'], 400);
+
+        try {
+            $svc = new \App\Services\HaciendaRecepcionService();
+            $data = $svc->checkStatus($xmlRecord->clave);
+            // Persistir un snapshot de la respuesta
+            \App\Models\HaciendaResponse::create([
+                'invoice_id' => $invoice->id,
+                'invoice_xml_id' => $xmlRecord->id,
+                'clave' => $xmlRecord->clave,
+                'estado' => $data['ind-estado'] ?? ($data['estado'] ?? null),
+                'respuesta_xml' => $data['respuesta-xml'] ?? null,
+                'detalle' => $data,
+            ]);
+            // Marcar xml según estado
+            if (($data['ind-estado'] ?? '') === 'aceptado') {
+                $xmlRecord->update(['status' => 'accepted', 'accepted_at' => now()]);
+            } elseif (($data['ind-estado'] ?? '') === 'rechazado') {
+                $xmlRecord->update(['status' => 'rejected', 'rejected_at' => now()]);
+            }
+            return response()->json(['ok' => true, 'data' => $data]);
+        } catch (\Throwable $e) {
+            return response()->json(['ok' => false, 'error' => $e->getMessage()], 500);
+        }
+    }
+
+        // Ver el XML de respuesta de Hacienda para la última respuesta guardada
+    public function responseXml($id)
+    {
+        $invoice = Invoice::findOrFail($id);
+        $resp = $invoice->responses()->latest('id')->first();
+        if (!$resp || empty($resp->respuesta_xml)) {
+            return response()->json(['error' => 'No hay XML de respuesta almacenado para esta factura'], 404);
+        }
+        $xml = $resp->respuesta_xml;
+        $maybeDecoded = base64_decode($xml, true);
+        if ($maybeDecoded !== false && str_starts_with(trim($maybeDecoded), '<')) {
+            $xml = $maybeDecoded;
+        }
+        return response($xml, 200, [
+            'Content-Type' => 'application/xml; charset=UTF-8',
+            'Cache-Control' => 'no-cache',
+        ]);
+    }
+
+    // Generar y mostrar el XML de factura electrónica para un Invoice
+     public function xml($id)
+    {
+        $invoice = Invoice::findOrFail($id);
+        $service = new FacturaElectronicaXmlService();
+        $xml = $service->generarXml($invoice);
+
+        // Guardar XML generado y su estado de validación
+        try {
+            $xsdPath = base_path('TiqueteElectronico_V4.4.xsd');
+            $validator = new \App\Services\XmlValidatorService();
+            $signer = new \App\Services\SignXmlService();
+
+            $schemaValid = null; $errors = [];
+            if (file_exists($xsdPath)) {
+                [$schemaValid, $errors] = $validator->validateXmlAgainstXsd($xml, $xsdPath);
+            }
+
+            // Extraer Clave del XML 
+            $dom = new \DOMDocument('1.0', 'UTF-8');
+            $dom->loadXML($xml);
+            $ns = $dom->documentElement?->namespaceURI;
+            $xpath = new \DOMXPath($dom);
+            if ($ns) { $xpath->registerNamespace('fe', $ns); }
+            $clave = trim((string)$xpath->evaluate('string(//fe:Clave)'));
+
+            // Verificación de firma 
+            $signatureValid = null;
+            try { $signatureValid = $signer->verify($dom); } catch (\Throwable $e) { $signatureValid = null; }
+
+            $invoice->xmls()->create([
+                'clave' => $clave ?: null,
+                'document_type' => '04',
+                'schema_version' => '4.4',
+                'xml' => $xml,
+                'schema_valid' => $schemaValid,
+                'signature_valid' => $signatureValid,
+                'validation_errors' => !empty($errors) ? json_encode($errors, JSON_UNESCAPED_UNICODE) : null,
+                'status' => 'generated',
+            ]);
+        } catch (\Throwable $e) {
+            // No bloquear la entrega del XML si falla guardado/validación
+            if (function_exists('logger')) { logger()->warning('No se pudo persistir Invoice XML: ' . $e->getMessage()); }
+        }
+
+        return response($xml, 200, [
+            'Content-Type' => 'application/xml; charset=UTF-8',
+            'Cache-Control' => 'no-cache',
+        ]);
+    }
+
+    // Estado del último XML  para verificar que toma valores reales
+    public function xmlStatus($id)
+    {
+        $invoice = Invoice::findOrFail($id);
+        $xmlRecord = $invoice->xmls()->latest('id')->first();
+        if (!$xmlRecord) {
+            return response()->json(['error' => 'No hay XML generado para esta factura'], 404);
+        }
+
+        $xml = $xmlRecord->xml;
+        $dom = new \DOMDocument('1.0', 'UTF-8');
+        $dom->loadXML($xml);
+        $ns = $dom->documentElement?->namespaceURI;
+    $xpath = new \DOMXPath($dom);
+    if ($ns) { $xpath->registerNamespace('fe', $ns); }
+    $xpath->registerNamespace('ds', 'http://www.w3.org/2000/09/xmldsig#');
+
+    $proveedor = trim((string)$xpath->evaluate('string(//fe:ProveedorSistemas)'));
+    $codigoAct = trim((string)$xpath->evaluate('string(//fe:CodigoActividadEmisor)'));
+    $emisorTipo = trim((string)$xpath->evaluate('string(//fe:Emisor/fe:Identificacion/fe:Tipo)'));
+    $emisorNumero = trim((string)$xpath->evaluate('string(//fe:Emisor/fe:Identificacion/fe:Numero)'));
+        $schemaLocation = trim((string)$dom->documentElement->getAttributeNS('http://www.w3.org/2001/XMLSchema-instance', 'schemaLocation'));
+        $hasSignature = (bool)$xpath->evaluate('count(//ds:Signature)') > 0;
+
+        return response()->json([
+            'id' => $xmlRecord->id,
+            'clave' => $xmlRecord->clave,
+            'status' => $xmlRecord->status,
+            'error_message' => $xmlRecord->error_message,
+            'schema_valid' => $xmlRecord->schema_valid,
+            'signature_valid' => $xmlRecord->signature_valid,
+            'embedded' => [
+                'ProveedorSistemas' => $proveedor,
+                'CodigoActividadEmisor' => $codigoAct,
+                'EmisorTipo' => $emisorTipo,
+                'EmisorNumero' => $emisorNumero,
+                'xsi:schemaLocation' => $schemaLocation,
+                'hasSignatureNode' => $hasSignature,
+            ],
+        ]);
+    }
+
+
+
+    
+   // Create a new invoice
     public function store(Request $request)
     {
         $data = $request->validate([
-            // Customer info
-            'customer_name' => 'required|string',
-            'customer_identity_number' => 'required|string',
+            // Receptor no obligatorio para tiquete
+            'customer_name' => 'nullable|string',
+            'customer_identity_number' => 'nullable|string',
            
             // Branch / Business info
             'branch_name' => 'required|string',
@@ -55,6 +248,7 @@ class InvoiceController extends Controller
             'amount_paid' => 'nullable|numeric|min:0',
             'receipt' => 'nullable|string',
         ]);
+        $documentType = '04'; 
 
         // Calcular subtotal y total de descuento
         $subtotal = 0;
@@ -73,8 +267,8 @@ class InvoiceController extends Controller
 
         // Crear factura
         $invoice = Invoice::create([
-            'customer_name' => $data['customer_name'],
-            'customer_identity_number' => $data['customer_identity_number'],
+            'customer_name' => $data['customer_name'] ?? null,
+            'customer_identity_number' => $data['customer_identity_number'] ?? null,
 
             'branch_name' => $data['branch_name'],
             'business_name' => $data['business_name'],
@@ -88,6 +282,7 @@ class InvoiceController extends Controller
             'business_id_number' => $data['business_id_number'] ?? null,
             'cashier_name' => $data['cashier_name'],
             'date' => now(),
+            'document_type' => $documentType,
             'products' => $data['products'],
             'subtotal' => $subtotal,
             'total_discount' => $totalDiscount,
@@ -98,8 +293,56 @@ class InvoiceController extends Controller
             'payment_method' => $data['payment_method'],
             'receipt' => $data['receipt'] ?? ($data['payment_method'] === 'Cash' ? 'N/A' : ''),
         ]);
+        // Crear items snapshot
+        foreach ($data['products'] as $p) {
+            // Buscar producto catálogo para snapshot enriquecido
+            $productModel = \App\Models\Product::where('codigo_producto', $p['code'])->with('unit')->first();
+            $codigoCabys = null;
+            if ($productModel && $productModel->codigo_cabys) {
+                $codigoCabys = preg_replace('/[^0-9]/', '', $productModel->codigo_cabys);
+            }
+            if (!$codigoCabys || strlen($codigoCabys) !== 13) {
+                $codigoCabys = str_pad((string)$codigoCabys, 13, '0', STR_PAD_RIGHT);
+            }
+            $unidadMedida = $productModel && $productModel->unit ? $productModel->unit->unidMedida : 'Unid';
+            $cantidad = (float)$p['quantity'];
+            $precioUnitario = (float)$p['price'];
+            $montoBruto = $cantidad * $precioUnitario;
+            $descuentoPct = (float)($p['discount'] ?? 0);
+            $subtotalLinea = $montoBruto - ($montoBruto * $descuentoPct / 100.0);
+            // Impuesto: usar campo impuesto del producto si existe, sino derivar CABYS, sino 13%
+            $impuestoPorcentaje = null;
+            if ($productModel && $productModel->impuesto !== null) {
+                $impuestoPorcentaje = (float)$productModel->impuesto;
+            } elseif ($codigoCabys && $codigoCabys !== str_repeat('0',13)) {
+                $cabysRow = \App\Models\Cabys::find($codigoCabys);
+                if ($cabysRow && $cabysRow->tax_rate !== null) {
+                    $impuestoPorcentaje = (float)$cabysRow->tax_rate;
+                }
+            }
+            if ($impuestoPorcentaje === null) {
+                $impuestoPorcentaje = 13.0; // fallback general
+            }
+            $impuestoMonto = $subtotalLinea * ($impuestoPorcentaje / 100.0);
+            $totalLinea = $subtotalLinea + $impuestoMonto;
 
-        return response()->json($invoice, 201);
+            $invoice->items()->create([
+                'product_id' => $productModel?->id,
+                'codigo_producto' => $p['code'],
+                'descripcion' => $productModel->descripcion ?? ($productModel->nombre_producto ?? 'Producto'),
+                'codigo_cabys' => $codigoCabys,
+                'unidad_medida' => $unidadMedida,
+                'impuesto_porcentaje' => $impuestoPorcentaje,
+                'cantidad' => $cantidad,
+                'precio_unitario' => $precioUnitario,
+                'descuento_pct' => $descuentoPct,
+                'subtotal_linea' => $subtotalLinea,
+                'impuesto_monto' => $impuestoMonto,
+                'total_linea' => $totalLinea,
+            ]);
+        }
+
+        return response()->json($invoice->load('items'), 201);
     }
 
     // Update an invoice
