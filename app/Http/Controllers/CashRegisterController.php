@@ -16,11 +16,11 @@ class CashRegisterController extends Controller
             'opening_amount' => 'required|numeric|min:0',
         ]);
 
-        // Crear caja sin limitar a una por sucursal
         $register = CashRegister::create([
             'sucursal_id' => $validated['sucursal_id'],
             'user_id' => $validated['user_id'],
             'opening_amount' => $validated['opening_amount'],
+            'available_amount' => $validated['opening_amount'], // monto inicial disponible
             'opened_at' => now(),
         ]);
 
@@ -31,15 +31,13 @@ class CashRegisterController extends Controller
     }
 
     // Cerrar caja
-    public function close(Request $request, $id)
+    public function close($id)
     {
-        $validated = $request->validate([
-            'closing_amount' => 'required|numeric|min:0',
-        ]);
-
         $register = CashRegister::findOrFail($id);
+
+        // Al cerrar, el monto final es lo que quedó disponible
         $register->update([
-            'closing_amount' => $validated['closing_amount'],
+            'closing_amount' => $register->available_amount,
             'closed_at' => now(),
         ]);
 
@@ -62,4 +60,45 @@ class CashRegisterController extends Controller
     {
         return CashRegister::with(['branch', 'user'])->findOrFail($id);
     }
+public function active($sucursalId)
+{
+    $cajas = CashRegister::where('sucursal_id', $sucursalId)
+        ->whereNull('closed_at')
+        ->latest('opened_at')
+        ->get();
+
+    return response()->json([
+        'cajas' => $cajas
+    ]);
+}
+
+// Actualizar caja con venta en efectivo
+public function addCashSale(Request $request)
+{
+    $validated = $request->validate([
+        'id' => 'required|exists:cash_registers,id', // <- se pide id de la caja
+        'amount_received' => 'required|numeric|min:0',
+        'change_given' => 'required|numeric|min:0',
+    ]);
+
+    $caja = CashRegister::find($validated['id']);
+
+    // Verificar que esté abierta
+    if (!$caja || $caja->closed_at) {
+        return response()->json([
+            'message' => 'La caja seleccionada no está activa.'
+        ], 400);
+    }
+
+    // Calcular ingreso neto
+    $netIncome = $validated['amount_received'] - $validated['change_given'];
+    $caja->available_amount = ($caja->available_amount ?? 0) + $netIncome;
+    $caja->save();
+
+    return response()->json([
+        'message' => 'Caja actualizada correctamente',
+        'data' => $caja->load(['branch', 'user'])
+    ]);
+}
+
 }

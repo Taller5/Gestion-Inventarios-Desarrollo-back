@@ -16,6 +16,7 @@ class CashRegister extends Model
         'user_id',
         'opening_amount',
         'closing_amount',
+        'available_amount',
         'opened_at',
         'closed_at',
     ];
