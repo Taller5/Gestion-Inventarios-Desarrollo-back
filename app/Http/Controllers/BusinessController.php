@@ -18,6 +18,9 @@ class BusinessController extends Controller
         return response()->json($businesses); // Devuelve [] si no hay negocios
     }
 
+
+
+
     public function store(Request $request)
     {
         $validator = Validator::make($request->all(), [
@@ -30,6 +33,7 @@ class BusinessController extends Controller
             'descripcion' => 'nullable|string',
             'telefono' => 'required|string|max:20',
             'email' => 'required|email|unique:businesses,email',
+             'logo' => 'nullable|string',
         ]);
 
         if ($validator->fails()) {
@@ -74,6 +78,7 @@ class BusinessController extends Controller
             'descripcion' => 'nullable|string',
             'telefono' => 'sometimes|required|string|max:20',
             'email' => 'sometimes|required|email|unique:businesses,email,' . $id . ',negocio_id',
+            'logo' => 'nullable|string',
         ]);
 
         if ($validator->fails()) {
@@ -98,4 +103,18 @@ class BusinessController extends Controller
         $business->delete();
         return response()->json(['mensaje' => 'Negocio eliminado correctamente'], 204);
     }
+    public function updateLogo(Request $request, $id)
+{
+    $business = Business::findOrFail($id);
+
+    $request->validate([
+        'logo' => 'required|url',
+    ]);
+
+    $business->logo = $request->input('logo');
+    $business->save();
+
+    return response()->json(['message' => 'El logo de la empresa ha sido actualizada', 'logo' => $business->logo]);
+}
+
 }

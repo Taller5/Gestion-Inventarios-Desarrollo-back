@@ -366,4 +366,50 @@ class InvoiceController extends Controller
         $invoice->delete();
         return response()->json(null, 204);
     }
+
+    // Obtener facturas agrupadas por negocio
+public function reportByBusiness(Request $request)
+{
+    // Filtrado opcional por rango de fechas
+    $startDate = $request->query('start_date'); // formato: Y-m-d
+    $endDate   = $request->query('end_date');
+
+    $query = Invoice::query();
+
+    if ($startDate) {
+        $query->whereDate('date', '>=', $startDate);
+    }
+    if ($endDate) {
+        $query->whereDate('date', '<=', $endDate);
+    }
+
+    // Obtener facturas y agrupar por negocio
+    $invoices = $query->orderBy('date', 'desc')->get()->groupBy('business_name');
+
+    $result = [];
+
+    foreach ($invoices as $business => $businessInvoices) {
+        $totalSales = $businessInvoices->sum('total');
+        $count = $businessInvoices->count();
+
+        $result[] = [
+            'business_name' => $business,
+            'total_sales' => $totalSales,
+            'invoice_count' => $count,
+            'invoices' => $businessInvoices->map(function($inv) {
+                return [
+                    'id' => $inv->id,
+                    'branch_name' => $inv->branch_name,
+                    'date' => $inv->date,
+                    'customer_name' => $inv->customer_name,
+                    'total' => $inv->total,
+                    'payment_method' => $inv->payment_method,
+                ];
+            }),
+        ];
+    }
+
+    return response()->json($result);
+}
+
 }

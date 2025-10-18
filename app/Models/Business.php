@@ -21,6 +21,7 @@ class Business extends Model
         'descripcion',
         'telefono',
         'email',
+        'logo',
     ];
 
     /**

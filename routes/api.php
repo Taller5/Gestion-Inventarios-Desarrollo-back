@@ -47,6 +47,7 @@ Route::prefix('v1')->group(function () {
     Route::post('businesses', [BusinessController::class, 'store']);
     Route::put('businesses/{id}', [BusinessController::class, 'update']);
     Route::delete('businesses/{id}', [BusinessController::class, 'destroy']);
+    Route::post('businesses/{id}/logo', [BusinessController::class, 'updateLogo']);
 
     // ------------------ Branches ------------------
     Route::get('branches', [BranchController::class, 'index']);
@@ -87,12 +88,18 @@ Route::prefix('v1')->group(function () {
     Route::get('invoices/{id}/status', [InvoiceController::class, 'status']);// Estado en Hacienda
     Route::get('invoices/{id}/response-xml', [InvoiceController::class, 'responseXml']);// Obtener XML de respuesta de Hacienda
     Route::get('invoices/{id}/validate-xml', [InvoiceController::class, 'validateXml']); // Validar XML contra XSD
+    Route::get('invoices/by-business', [InvoiceController::class, 'reportByBusiness']);
 
     // ------------------ Cash Registers ------------------
     Route::get('cash-registers', [CashRegisterController::class, 'index']);       // Listar todas las cajas
     Route::get('cash-registers/{id}', [CashRegisterController::class, 'show']);   // Mostrar una caja específica
     Route::post('cash-registers/open', [CashRegisterController::class, 'open']);  // Abrir caja
-    Route::post('cash-registers/close/{id}', [CashRegisterController::class, 'close']); // Cerrar caja
+    Route::put('cash-register/close/{id}', [CashRegisterController::class, 'close']);
+    Route::get('cashbox/active/{sucursalId}', [CashRegisterController::class, 'active']);
+    Route::post('cash-register/addCashSale', [CashRegisterController::class, 'addCashSale']);
+
+
+
 
     // ------------------ Providers ------------------
     Route::get('providers', [ProviderController::class, 'index']);       // Listar todos
@@ -126,4 +133,4 @@ Route::options('/{any}', function (Request $request) {
         ->header('Access-Control-Allow-Origin', '*') // o 'http://localhost:5173' si querés más restricción
         ->header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
         ->header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-})->where('any', '.*');
+})->where('any', '.*');  
