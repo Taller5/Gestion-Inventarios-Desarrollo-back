@@ -31,21 +31,40 @@ class CashRegisterController extends Controller
     }
 
     // Cerrar caja
-    public function close($id)
-    {
-        $register = CashRegister::findOrFail($id);
+// Cerrar caja
+public function close(Request $request, $id)
+{
+    $validated = $request->validate([
+        'user_id' => 'required|exists:users,id',
+    ]);
 
-        // Al cerrar, el monto final es lo que quedó disponible
-        $register->update([
-            'closing_amount' => $register->available_amount,
-            'closed_at' => now(),
-        ]);
+    $register = CashRegister::findOrFail($id);
 
+    //  Verificar si la caja está abierta
+    if ($register->closed_at) {
         return response()->json([
-            'message' => 'Caja cerrada correctamente',
-            'data' => $register->load(['branch', 'user'])
-        ]);
+            'message' => 'La caja ya fue cerrada anteriormente.'
+        ], 400);
     }
+
+    //  Validar que el usuario que intenta cerrar sea el mismo que la abrió
+    if ($register->user_id !== (int) $validated['user_id']) {
+        return response()->json([
+            'message' => 'No tienes permiso para cerrar esta caja. Solo el usuario que la abrió puede hacerlo.'
+        ], 403);
+    }
+
+    //  Al cerrar, el monto final es lo que quedó disponible
+    $register->update([
+        'closing_amount' => $register->available_amount,
+        'closed_at' => now(),
+    ]);
+
+    return response()->json([
+        'message' => 'Caja cerrada correctamente.',
+        'data' => $register->load(['branch', 'user'])
+    ]);
+}
 
     // Listar todas las cajas
     public function index()
@@ -71,6 +90,20 @@ public function active($sucursalId)
         'cajas' => $cajas
     ]);
 }
+
+public function activeUserBox($sucursalId, $userId)
+{
+    $caja = CashRegister::where('sucursal_id', $sucursalId)
+        ->where('user_id', $userId)
+        ->whereNull('closed_at')
+        ->latest('opened_at')
+        ->first(); // solo devuelve la más reciente
+
+    return response()->json([
+        'caja' => $caja // null si no tiene caja
+    ]);
+}
+
 
 // Actualizar caja con venta en efectivo
 public function addCashSale(Request $request)
@@ -100,5 +133,46 @@ public function addCashSale(Request $request)
         'data' => $caja->load(['branch', 'user'])
     ]);
 }
+public function reopen(Request $request, $id)
+{
+    $validated = $request->validate([
+        'user_id' => 'required|exists:users,id',
+    ]);
+
+    $caja = CashRegister::findOrFail($id);
+
+    // Verificar que la caja esté cerrada
+    if (is_null($caja->closed_at)) {
+        return response()->json([
+            'message' => 'No se puede reabrir una caja que ya está abierta.'
+        ], 400);
+    }
+
+    // Verificar si el usuario ya tiene una caja activa en esta sucursal
+    $activeCaja = CashRegister::where('user_id', $validated['user_id'])
+        ->where('sucursal_id', $caja->sucursal_id)
+        ->whereNull('closed_at')
+        ->first();
+
+    if ($activeCaja) {
+        return response()->json([
+            'message' => 'El usuario ya tiene una caja activa en esta sucursal.'
+        ], 400);
+    }
+
+    // Reabrir caja: solo cambia el usuario y la marca como abierta de nuevo
+    $caja->update([
+        'user_id' => $validated['user_id'],
+        'opened_at' => now(),
+        'closed_at' => null,
+        'closing_amount' => null, // opcional, se limpia el cierre previo
+    ]);
+
+    return response()->json([
+        'message' => 'Caja reabierta correctamente con el nuevo usuario.',
+        'data' => $caja->load(['branch', 'user'])
+    ]);
+}
+
 
 }
