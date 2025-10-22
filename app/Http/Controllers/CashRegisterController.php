@@ -8,27 +8,67 @@ use Illuminate\Http\Request;
 class CashRegisterController extends Controller
 {
     // Abrir caja
-    public function open(Request $request)
-    {
-        $validated = $request->validate([
-            'sucursal_id' => 'required|exists:branches,sucursal_id',
-            'user_id' => 'required|exists:users,id',
-            'opening_amount' => 'required|numeric|min:0',
-        ]);
+  public function open(Request $request)
+{
+    $validated = $request->validate([
+        'sucursal_id' => 'required|exists:branches,sucursal_id',
+        'user_id' => 'required|exists:users,id',
+        'opening_amount' => 'required|numeric|min:0',
+    ]);
 
-        $register = CashRegister::create([
-            'sucursal_id' => $validated['sucursal_id'],
-            'user_id' => $validated['user_id'],
-            'opening_amount' => $validated['opening_amount'],
-            'available_amount' => $validated['opening_amount'], // monto inicial disponible
-            'opened_at' => now(),
-        ]);
+    // Verificar si el usuario ya tiene una caja abierta con saldo disponible
+    $activeRegister = CashRegister::where('user_id', $validated['user_id'])
+        ->whereNull('closed_at')            // aún no cerrada
+        ->where('available_amount', '>', 0) // descarta cajas vacías
+        ->first();
 
+    if ($activeRegister) {
         return response()->json([
-            'message' => 'Caja abierta correctamente',
-            'data' => $register->load(['branch', 'user'])
-        ], 201);
+            'message' => 'El usuario ya tiene una caja abierta,no puede abrir otra.',
+            'data' => $activeRegister->load(['branch', 'user'])
+        ], 400); // Bad Request
     }
+
+    // Crear la nueva caja
+    $register = CashRegister::create([
+        'sucursal_id' => $validated['sucursal_id'],
+        'user_id' => $validated['user_id'],
+        'opening_amount' => $validated['opening_amount'],
+        'available_amount' => $validated['opening_amount'], // monto inicial disponible
+        'opened_at' => now(),
+    ]);
+
+    return response()->json([
+        'message' => 'Caja abierta correctamente',
+        'data' => $register->load(['branch', 'user'])
+    ], 201);
+}
+
+public function createEmpty(Request $request)
+{
+    $validated = $request->validate([
+        'sucursal_id' => 'required|exists:branches,sucursal_id',
+        'user_id' => 'required|exists:users,id',
+    ]);
+
+    $register = CashRegister::create([
+        'sucursal_id' => $validated['sucursal_id'],
+        'user_id' => $validated['user_id'],
+        'opening_amount' => 0,
+        'available_amount' => 0,
+        'closing_amount' => 0,
+        'opened_at' => now(), // opcional, si quieres marcar que se abrió "vacía"
+        'closed_at' => null,
+    ]);
+
+    return response()->json([
+        'message' => 'Caja creada correctamente, pendiente de apertura.',
+        'data' => $register->load('branch')
+    ], 201);
+}
+
+
+
 
     // Cerrar caja
 // Cerrar caja
@@ -96,11 +136,16 @@ public function activeUserBox($sucursalId, $userId)
     $caja = CashRegister::where('sucursal_id', $sucursalId)
         ->where('user_id', $userId)
         ->whereNull('closed_at')
+        ->where(function ($query) {
+            $query->where('opening_amount', '>', 0)
+                  ->orWhere('available_amount', '>', 0)
+                  ->orWhere('closing_amount', '>', 0);
+        })
         ->latest('opened_at')
-        ->first(); // solo devuelve la más reciente
+        ->first(); // devuelve la caja activa con datos
 
     return response()->json([
-        'caja' => $caja // null si no tiene caja
+        'caja' => $caja // null si no tiene caja activa con datos
     ]);
 }
 

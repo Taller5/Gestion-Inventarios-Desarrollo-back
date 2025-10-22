@@ -99,9 +99,11 @@ Route::prefix('v1')->group(function () {
     '/cash-registers/active-user/{sucursalId}/{userId}',
     [CashRegisterController::class, 'activeUserBox']
 );
-    Route::put('cash-registers/close/{id}', [CashRegisterController::class, 'close']); // 👈 Asegúrate de tener esto
+    Route::put('cash-registers/close/{id}', [CashRegisterController::class, 'close']); //  Asegúrate de tener esto
     Route::get('cashbox/active/{sucursalId}', [CashRegisterController::class, 'active']);
     Route::post('cash-register/addCashSale', [CashRegisterController::class, 'addCashSale']);
+    Route::post('/cash-registers/create-empty', [CashRegisterController::class, 'createEmpty']);
+
 
 
 
