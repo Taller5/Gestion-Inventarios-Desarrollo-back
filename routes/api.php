@@ -93,10 +93,10 @@ Route::prefix('v1')->group(function () {
     // ------------------ Cash Registers ------------------
     Route::get('cash-registers', [CashRegisterController::class, 'index']);       // Listar todas las cajas
     Route::get('cash-registers/{id}', [CashRegisterController::class, 'show']);   // Mostrar una caja específica
-    Route::post('cash-registers/open', [CashRegisterController::class, 'open']);  // Abrir caja
+    Route::put('cash-registers/open/{id}', [CashRegisterController::class, 'open']);
+
    Route::put('cash-registers/reopen/{id}', [CashRegisterController::class, 'reopen']);
-   Route::get(
-    '/cash-registers/active-user/{sucursalId}/{userId}',
+   Route::get('/cash-registers/active-user/{sucursalId}/{userId}',
     [CashRegisterController::class, 'activeUserBox']
 );
     Route::put('cash-registers/close/{id}', [CashRegisterController::class, 'close']); //  Asegúrate de tener esto

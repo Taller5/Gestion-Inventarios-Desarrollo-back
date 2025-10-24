@@ -8,41 +8,63 @@ use Illuminate\Http\Request;
 class CashRegisterController extends Controller
 {
     // Abrir caja
-  public function open(Request $request)
+public function open(Request $request)
 {
     $validated = $request->validate([
-        'sucursal_id' => 'required|exists:branches,sucursal_id',
+        'id' => 'required|exists:cash_registers,id', // ✅ obligatorio ahora
         'user_id' => 'required|exists:users,id',
         'opening_amount' => 'required|numeric|min:0',
     ]);
 
-    // Verificar si el usuario ya tiene una caja abierta con saldo disponible
+    // Buscar la caja a abrir
+    $register = CashRegister::where('id', $validated['id'])
+        ->whereNull('closed_at')
+        ->first();
+
+    if (!$register) {
+        return response()->json([
+            'message' => 'La caja especificada no existe o ya fue cerrada.'
+        ], 404);
+    }
+
+    // Verificar que esté vacía
+    if (
+        $register->opening_amount != 0 ||
+        $register->available_amount != 0 ||
+        $register->closing_amount != 0
+    ) {
+        return response()->json([
+            'message' => 'La caja seleccionada no está vacía, no se puede abrir.'
+        ], 400);
+    }
+
+    // Verificar que el usuario no tenga otra caja abierta
     $activeRegister = CashRegister::where('user_id', $validated['user_id'])
-        ->whereNull('closed_at')            // aún no cerrada
-        ->where('available_amount', '>', 0) // descarta cajas vacías
+        ->whereNull('closed_at')
+        ->where('available_amount', '>', 0)
         ->first();
 
     if ($activeRegister) {
         return response()->json([
-            'message' => 'El usuario ya tiene una caja abierta,no puede abrir otra.',
+            'message' => 'El usuario ya tiene una caja abierta, no puede abrir otra.',
             'data' => $activeRegister->load(['branch', 'user'])
-        ], 400); // Bad Request
+        ], 400);
     }
 
-    // Crear la nueva caja
-    $register = CashRegister::create([
-        'sucursal_id' => $validated['sucursal_id'],
+    // ✅ Actualizar la caja vacía y marcarla como abierta
+    $register->update([
         'user_id' => $validated['user_id'],
         'opening_amount' => $validated['opening_amount'],
-        'available_amount' => $validated['opening_amount'], // monto inicial disponible
+        'available_amount' => $validated['opening_amount'],
         'opened_at' => now(),
     ]);
 
     return response()->json([
-        'message' => 'Caja abierta correctamente',
+        'message' => 'Caja vacía abierta correctamente.',
         'data' => $register->load(['branch', 'user'])
-    ], 201);
+    ], 200);
 }
+
 
 public function createEmpty(Request $request)
 {
