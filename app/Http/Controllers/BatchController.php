@@ -29,7 +29,7 @@ class BatchController extends Controller
             'cantidad' => 'required|integer|min:0',
             'proveedor' => 'required',
             'fecha_entrada' => 'required|date',
-            'fecha_vencimiento' => 'required|date',
+            'fecha_vencimiento' => 'nullable|date',
             'fecha_salida_lote' => 'nullable|date',
             'descripcion' => 'nullable',
             'nombre' => 'required'
@@ -56,7 +56,7 @@ class BatchController extends Controller
             'cantidad' => 'sometimes|required|integer|min:0',
             'proveedor' => 'sometimes|required',
             'fecha_entrada' => 'sometimes|required|date',
-            'fecha_vencimiento' => 'sometimes|required|date',
+            'fecha_vencimiento' => 'nullable|date',
             'fecha_salida_lote' => 'nullable|date',
             'descripcion' => 'nullable',
             'nombre' => 'sometimes|required'
