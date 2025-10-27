@@ -9,7 +9,8 @@ class HaciendaTokenService
 {
     public function getAccessToken(): string
     {
-        $env = strtolower((string) (config('services.hacienda.env') ?? env('HACIENDA_ENV', 'stag')));
+    // Solo staging: forzar entorno a 'stag'
+    $env = 'stag';
         $username = (string) (config('services.hacienda.username') ?? env('HACIENDA_USERNAME', ''));
         $password = (string) (config('services.hacienda.password') ?? env('HACIENDA_PASSWORD', ''));
 
@@ -23,13 +24,15 @@ class HaciendaTokenService
             return $cached['access_token'];
         }
 
+    // URL de token solo para staging (realm rut-stag)
         $tokenUrl = (string) (config('services.hacienda.token_url')
-            ?? ($env === 'prod' ? config('services.hacienda.token_url_prod') : config('services.hacienda.token_url_stag'))
-            ?? env('HACIENDA_TOKEN_URL', 'https://idp.comprobanteselectronicos.go.cr/auth/realms/rut/protocol/openid-connect/token'));
+            ?? config('services.hacienda.token_url_stag')
+            ?? env('HACIENDA_TOKEN_URL', 'https://idp.comprobanteselectronicos.go.cr/auth/realms/rut-stag/protocol/openid-connect/token'));
 
+    // Client id solo para staging
         $clientId = (string) (config('services.hacienda.client_id')
-            ?? ($env === 'prod' ? (config('services.hacienda.client_id_prod') ?? 'api-prod') : (config('services.hacienda.client_id_stag') ?? 'api-stag'))
-            ?? env('HACIENDA_CLIENT_ID', $env === 'prod' ? 'api-prod' : 'api-stag'));
+            ?? (config('services.hacienda.client_id_stag') ?? 'api-stag')
+            ?? env('HACIENDA_CLIENT_ID', 'api-stag'));
 
         $http = new Client([ 'timeout' => 20 ]);
         $response = $http->post($tokenUrl, [

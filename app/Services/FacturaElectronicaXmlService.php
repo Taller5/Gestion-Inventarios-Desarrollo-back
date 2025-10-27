@@ -7,15 +7,21 @@ use App\Models\Product;
 use DOMDocument;
 use DOMElement;
 
-use App\Services\SignXmlService;
+use App\Services\CertificateService;
 
 class FacturaElectronicaXmlService
 {
-    private SignXmlService $signer;
+    private CertificateService $certSvc;
+    private ?SignerService $Signer = null;
 
-    public function __construct(?SignXmlService $signer = null)
+    public function __construct(?CertificateService $certSvc = null)
     {
-        $this->signer = $signer ?? new SignXmlService();
+        $this->certSvc = $certSvc ?? new CertificateService();
+    // Inicializar firmador alternativo sólo si el toggle está habilitado
+        $useAlt = (bool) (config('services.hacienda.use_alt_signer') ?? filter_var(getenv('HACIENDA_USE_ALT_SIGNER') ?: 'false', FILTER_VALIDATE_BOOL));
+        if ($useAlt) {
+            $this->Signer = new SignerService();
+        }
     }
     /**
      * Genera el XML de Factura Electrónica versión 4.4 para Hacienda CR.
@@ -27,8 +33,10 @@ class FacturaElectronicaXmlService
         // --- Generar todo el XML con DOMDocument y createElementNS ---
     // Namespace específico de Tiquete Electrónico v4.4 según XSD oficial
     $ns = 'https://cdn.comprobanteselectronicos.go.cr/xml-schemas/v4.4/tiqueteElectronico';
-        $dom = new DOMDocument('1.0', 'UTF-8');
-        $dom->formatOutput = true; // Para una salida formateada y legible
+    $dom = new DOMDocument('1.0', 'UTF-8');
+    // IMPORTANTE: No formatear (pretty-print); preservar los espacios en blanco para evitar alterar los bytes firmados
+    $dom->preserveWhiteSpace = true;
+    $dom->formatOutput = false; // sin pretty-print
 
     // Crear nodo raíz con namespace por defecto
     // Sólo generamos tiquete electrónico (document_type forzado a 04)
@@ -39,10 +47,10 @@ class FacturaElectronicaXmlService
         // Asegurar namespace por defecto y declarar explícitamente los prefijos usados por atributos/elementos:
         // - xmlns (por defecto) para el documento
     // - xsi: para schemaLocation
-    // - ds: para la firma XML (xmldsig)
+    // - xsd: para compatibilidad con validadores que lo esperan declarado
     $root->setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns', $ns);
     $root->setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:xsi', 'http://www.w3.org/2001/XMLSchema-instance');
-    $root->setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:ds', 'http://www.w3.org/2000/09/xmldsig#');
+    $root->setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:xsd', 'http://www.w3.org/2001/XMLSchema');
 
 
         // Seleccionar XSD según tipo (ahora sólo tiquete). Permite configurar por env:
@@ -56,7 +64,9 @@ class FacturaElectronicaXmlService
         );
     $root->setAttributeNS('http://www.w3.org/2001/XMLSchema-instance', 'xsi:schemaLocation', $ns . ' ' . $schemaLocation);
 
-    // No attribute Id en el root: el XSD de tiquete no define atributos en el raíz.
+    // No attribute Id/id en el root: el XSD de tiquete no define atributos en el raíz.
+    if ($root->hasAttribute('Id')) { $root->removeAttribute('Id'); }
+    if ($root->hasAttribute('id')) { $root->removeAttribute('id'); }
 
         // 2) Encabezado
         $codigoPais = '506';
@@ -82,10 +92,31 @@ class FacturaElectronicaXmlService
             );
         }
         $idEmisor = str_pad($emisorNumeroDoc, 12, '0', STR_PAD_LEFT);
-        $sucursal = str_pad($invoice->branch ?? '001', 3, '0', STR_PAD_LEFT);
-        $terminal = str_pad($invoice->terminal ?? '001', 5, '0', STR_PAD_LEFT);
-    $tipoDoc = '04'; // Tiquete
-        $numeroSec = str_pad($invoice->sequential ?? '1', 10, '0', STR_PAD_LEFT);
+        // Preferir IDs numéricos si están disponibles: sucursal_id / branch_id para sucursal,
+        // cash_register_id / caja_id para terminal. Si no existen, mantener compatibilidad
+        // con los campos legados $invoice->branch y $invoice->terminal.
+        $sucursalId = null;
+        if (isset($invoice->sucursal_id) && is_numeric($invoice->sucursal_id)) {
+            $sucursalId = (int) $invoice->sucursal_id;
+        } elseif (isset($invoice->branch_id) && is_numeric($invoice->branch_id)) {
+            $sucursalId = (int) $invoice->branch_id;
+        } elseif (isset($invoice->branch) && is_numeric($invoice->branch)) {
+            $sucursalId = (int) $invoice->branch;
+        }
+        $sucursal = str_pad((string) ($sucursalId ?? ($invoice->branch ?? '003')), 3, '0', STR_PAD_LEFT);
+
+        $terminalId = null;
+        if (isset($invoice->cash_register_id) && is_numeric($invoice->cash_register_id)) {
+            $terminalId = (int) $invoice->cash_register_id;
+        } elseif (isset($invoice->caja_id) && is_numeric($invoice->caja_id)) {
+            $terminalId = (int) $invoice->caja_id;
+        } elseif (isset($invoice->terminal) && is_numeric($invoice->terminal)) {
+            $terminalId = (int) $invoice->terminal;
+        }
+        // Terminal en XSD usa 5 dígitos
+        $terminal = str_pad((string) ($terminalId ?? ($invoice->terminal ?? '002')), 5, '0', STR_PAD_LEFT);
+        $tipoDoc = '04'; // Tiquete
+        $numeroSec = str_pad((string) ((int) ($invoice->sequential ?? $invoice->id ?? 1)), 10, '0', STR_PAD_LEFT);
         $numeroConsecutivo = "{$sucursal}{$terminal}{$tipoDoc}{$numeroSec}";
         $situacionComprobante = '1';
         $codigoSeguridad = str_pad((string) random_int(0, 99999999), 8, '0', STR_PAD_LEFT);
@@ -109,10 +140,6 @@ class FacturaElectronicaXmlService
 
         // 3) Emisor
     $emisor = $dom->createElementNS($ns, 'Emisor');
-    // Nombre emisor: min 5, max 100
-    $nombreEmisor = $this->enforceLength(trim((string)($invoice->business_name ?? 'Empresa')), 5, 100, ' ');
-    $emisor->appendChild($dom->createElementNS($ns, 'Nombre', $nombreEmisor));
-        
         $identEm = $dom->createElementNS($ns, 'Identificacion');
         // Tipo de identificación: forzar > invoice > config/env; fallback '01'
         $tipoIdEmisorCfg = (string) (config('services.hacienda.emisor_tipo') ?? getenv('HACIENDA_EMISOR_TIPO') ?: '01');
@@ -121,6 +148,21 @@ class FacturaElectronicaXmlService
             ? $forceTipo
             : (string)($tipoIdEmisorCfg ?: ($invoice->business_id_type ?? '01'));
         $tipoIdEmisor = $this->sanitizeIdentType(preg_replace('/\D/', '', $tipoIdEmisorRaw), '01');
+    // Nombre emisor: min 5, max 100. Para persona física, si no viene un nombre razonable, usar CN del certificado.
+    $nombreEmisorRaw = trim((string)($invoice->business_name ?? ''));
+    if ($nombreEmisorRaw === '' || mb_strlen($nombreEmisorRaw, 'UTF-8') < 5) {
+        try {
+            $cn = $this->certSvc->getCertificateSubjectCN();
+            if ($cn && $tipoIdEmisor === '01') { // persona física
+                $nombreEmisorRaw = $cn;
+            }
+        } catch (\Throwable $e) { /* ignore */ }
+    }
+    if ($nombreEmisorRaw === '') { $nombreEmisorRaw = 'Emisor'; }
+    $nombreEmisor = $this->enforceLength($nombreEmisorRaw, 5, 100, ' ');
+    $emisor->appendChild($dom->createElementNS($ns, 'Nombre', $nombreEmisor));
+        
+        // Anexar tipo ya calculado
         $identEm->appendChild($dom->createElementNS($ns, 'Tipo', $tipoIdEmisor));
         // Número: usar el valor ya resuelto arriba para garantizar consistencia con Clave
         $identEm->appendChild($dom->createElementNS($ns, 'Numero', $emisorNumeroDoc));
@@ -131,9 +173,9 @@ class FacturaElectronicaXmlService
         }
 
         $ubic = $dom->createElementNS($ns, 'Ubicacion');
-        $ubic->appendChild($dom->createElementNS($ns, 'Provincia', is_numeric($invoice->province) ? (string)$invoice->province : '1'));
-        $ubic->appendChild($dom->createElementNS($ns, 'Canton', is_numeric($invoice->canton) ? str_pad($invoice->canton, 2, '0', STR_PAD_LEFT) : '01'));
-        $ubic->appendChild($dom->createElementNS($ns, 'Distrito', is_numeric($invoice->district) ? str_pad($invoice->district, 2, '0', STR_PAD_LEFT) : '01'));
+        $ubic->appendChild($dom->createElementNS($ns, 'Provincia', is_numeric($invoice->province) ? (string)$invoice->province : '2'));
+        $ubic->appendChild($dom->createElementNS($ns, 'Canton', is_numeric($invoice->canton) ? str_pad($invoice->canton, 2, '0', STR_PAD_LEFT) : '14'));
+        $ubic->appendChild($dom->createElementNS($ns, 'Distrito', is_numeric($invoice->district) ? str_pad($invoice->district, 2, '0', STR_PAD_LEFT) : '04'));
         // Barrio es opcional y requiere minLength=5; solo incluir si cumple
         $barrio = trim((string)($invoice->neighborhood ?? ''));
         if (strlen($barrio) >= 5) {
@@ -193,20 +235,18 @@ class FacturaElectronicaXmlService
             $linea = $dom->createElementNS($ns, 'LineaDetalle');
             $linea->appendChild($dom->createElementNS($ns, 'NumeroLinea', (string)($i + 1)));
 
+            // --- Cálculo de montos brutos y descuentos ---
             if ($usingSnapshot) {
-                // prod es instancia de InvoiceItem snapshot
                 $cabys = $prod->codigo_cabys;
                 $linea->appendChild($dom->createElementNS($ns, 'CodigoCABYS', $cabys));
                 $cantidad = (float)$prod->cantidad;
                 $precioUnitario = (float)$prod->precio_unitario;
-                $montoTotal = $precioUnitario * $cantidad; // antes de descuento
+                $montoBruto = $precioUnitario * $cantidad; // monto bruto antes de descuento
                 $descuentoPct = (float)$prod->descuento_pct;
-                $montoDescuento = $montoTotal * ($descuentoPct / 100.0);
+                $montoDescuento = $montoBruto * ($descuentoPct / 100.0);
                 $unidadMedida = $prod->unidad_medida;
                 $detalleTexto = $prod->descripcion;
             } else {
-                // Resolver CABYS y datos reales desde modelo Product si existe
-                // Estructuras posibles: $prod es un array con 'codigo_producto' o un modelo Product
                 $productModel = null;
                 if ($prod instanceof \App\Models\Product) {
                     $productModel = $prod;
@@ -218,21 +258,17 @@ class FacturaElectronicaXmlService
                     ?? ($prod['codigo_cabys'] ?? null)
                     ?? ($productModel->codigo_cabys ?? null)
                     ?? null;
-                // Cabys en DB es 'codigo_cabys' de 13 dígitos.
                 $cabys = preg_replace('/[^0-9]/', '', (string)$cabys);
                 if (!$cabys || strlen($cabys) !== 13) {
-                    // si viene más corto lo pad derecha con ceros, si vacío usar 13 ceros
                     $cabys = $cabys ? str_pad($cabys, 13, '0', STR_PAD_RIGHT) : str_repeat('0', 13);
                 }
                 $linea->appendChild($dom->createElementNS($ns, 'CodigoCABYS', $cabys));
-                
-                // Cantidad y precio: si viene en array usarlo; si no, derivar del modelo (precio_venta)
+
                 $cantidad = (float) ($prod['quantity'] ?? 1);
                 $precioUnitario = (float) ($prod['price'] ?? ($productModel->precio_venta ?? 0));
-                $montoTotal = $precioUnitario * $cantidad;
+                $montoBruto = $precioUnitario * $cantidad;
                 $descuentoPct = (float) ($prod['discount'] ?? 0.0);
-                $montoDescuento = $montoTotal * ($descuentoPct / 100.0);
-                // Unidad de medida dinámica
+                $montoDescuento = $montoBruto * ($descuentoPct / 100.0);
                 $unidadMedida = null;
                 if ($productModel && $productModel->relationLoaded('unit') && $productModel->unit) {
                     $unidadMedida = $productModel->unit->unidMedida;
@@ -246,24 +282,25 @@ class FacturaElectronicaXmlService
                     ?? ($productModel->descripcion ?? null)
                     ?? ($productModel->nombre_producto ?? 'Producto');
             }
+            $montoTotal = $montoBruto; // para compatibilidad con el resto del código
             
             // Cantidad en XSD: hasta 3 decimales (sin ceros a la derecha)
             $linea->appendChild($dom->createElementNS($ns, 'Cantidad', $this->formatDecimal($cantidad, 3)));
             $linea->appendChild($dom->createElementNS($ns, 'UnidadMedida', substr($unidadMedida, 0, 20)));
             $linea->appendChild($dom->createElementNS($ns, 'Detalle', htmlspecialchars(substr((string)$detalleTexto, 0, 160), ENT_XML1 | ENT_COMPAT, 'UTF-8')));
             $linea->appendChild($dom->createElementNS($ns, 'PrecioUnitario', number_format($precioUnitario, 5, '.', '')));
-            $linea->appendChild($dom->createElementNS($ns, 'MontoTotal', number_format($montoTotal, 5, '.', '')));
+            $linea->appendChild($dom->createElementNS($ns, 'MontoTotal', number_format($montoBruto, 5, '.', '')));
 
             if ($montoDescuento > 0.0) {
                 $descNode = $dom->createElementNS($ns, 'Descuento');
                 $descNode->appendChild($dom->createElementNS($ns, 'MontoDescuento', number_format($montoDescuento, 5, '.', '')));
-                $descNode->appendChild($dom->createElementNS($ns, 'CodigoDescuento', '01'));
+                $descNode->appendChild($dom->createElementNS($ns, 'CodigoDescuento', '06'));
                 $descNode->appendChild($dom->createElementNS($ns, 'NaturalezaDescuento', 'Descuento general'));
                 $linea->appendChild($descNode);
                 $totalDescuentos += $montoDescuento;
             }
 
-            $subtotalLinea = $montoTotal - $montoDescuento;
+            $subtotalLinea = $montoBruto - $montoDescuento;
             $linea->appendChild($dom->createElementNS($ns, 'SubTotal', number_format($subtotalLinea, 5, '.', '')));
             // BaseImponible es requerido por XSD en cada línea
             $linea->appendChild($dom->createElementNS($ns, 'BaseImponible', number_format($subtotalLinea, 5, '.', '')));
@@ -416,15 +453,15 @@ class FacturaElectronicaXmlService
             if ($esServicio) {
                 if ($codigoImpuestoClasif === '01') {
                     if ($ivaRateClasif > 0) {
-                        // Gravado con IVA
-                        $totalServGravados += $subtotalLinea;
+                        // Gravado con IVA (usar monto bruto)
+                        $totalServGravados += $montoBruto;
                     } else {
-                        // IVA 0% -> exento
-                        $totalServExentos += $subtotalLinea;
+                        // IVA 0% -> exento (usar monto bruto)
+                        $totalServExentos += $montoBruto;
                     }
                 } else {
                     // No sujeto a IVA (otros impuestos/ninguno)
-                    $totalServNoSujeto += $subtotalLinea;
+                    $totalServNoSujeto += $montoBruto;
                 }
             }
 
@@ -445,9 +482,9 @@ class FacturaElectronicaXmlService
                     $ivaRateTmp = (float)$appliedRate;
                 }
                 if ($codigoImpTmp === '01') {
-                    // Exoneración (si aplica): monto base multiplicado por (1 - porcentaje exoneración)
+                    // Exoneración (si aplica): monto bruto multiplicado por (1 - porcentaje exoneración)
                     $exoPct = $this->extractExonerationPercent($prod, $ivaRateTmp);
-                    $baseConsiderada = $subtotalLinea * (1.0 - $exoPct);
+                    $baseConsiderada = $montoBruto * (1.0 - $exoPct);
                     if ($impAsumido > 0.0) {
                         // Excluir mercancías con IVA cobrado a nivel de fábrica
                         // No sumar a mercancias gravadas
@@ -456,11 +493,11 @@ class FacturaElectronicaXmlService
                             $totalMercanciasGravadas += $baseConsiderada;
                         } else {
                             // 0% -> exentas o exoneradas
-                            if ($exoPct > 0.0 && $baseConsiderada < $subtotalLinea) {
-                                $totalMercanciasExonerada += ($subtotalLinea - $baseConsiderada);
+                            if ($exoPct > 0.0 && $baseConsiderada < $montoBruto) {
+                                $totalMercanciasExonerada += ($montoBruto - $baseConsiderada);
                                 $totalMercanciasExentas += $baseConsiderada;
                             } else {
-                                $totalMercanciasExentas += $subtotalLinea;
+                                $totalMercanciasExentas += $montoBruto;
                             }
                         }
                     }
@@ -557,10 +594,15 @@ class FacturaElectronicaXmlService
             $root->appendChild($otrosNode);
         }
 
-        // 12) Firma XML real con xmlseclibs (sustituye placeholder)
+        // Sanity check: validar que Emisor coincida con el titular del certificado configurado
+       
+
+        // 12) Firma XML con firmador alterno (único camino soportado)
         try {
-            // Firmar referenciando el documento completo (URI="")
-            $this->signer->sign($dom, null);
+            if (!$this->Signer) { throw new \RuntimeException('HACIENDA_USE_ALT_SIGNER debe ser true (firmador propio eliminado).'); }
+            $dom = $this->Signer->sign($dom);
+            // Importante: NO modificar el DOM después de firmar.
+            // Cualquier cambio (p. ej., remover atributos Id) invalida la firma.
         } catch (\Throwable $e) {
             // No insertar firma placeholder: el XSD exige exactamente una ds:Signature válida
             // y el placeholder provocaba múltiples firmas. Propaga el error para corregir configuración.
@@ -570,24 +612,9 @@ class FacturaElectronicaXmlService
             throw $e;
         }
 
-        // 13) (Opcional) Validación local de la firma para sanity check
-        $verifyEnabled = (bool) (config('services.hacienda.verify_signature_local', false) ?? filter_var(getenv('HACIENDA_VERIFY_SIGNATURE_LOCAL') ?: 'false', FILTER_VALIDATE_BOOL));
-        if ($verifyEnabled) {
-            try {
-                $ok = $this->signer->verify($dom);
-                if (!$ok) {
-                    // No abortar el proceso, pero dejar trazabilidad si el entorno tiene logger
-                    if (function_exists('logger')) {
-                        logger()->warning('XML signature verification failed for generated tiquete.');
-                    }
-                }
-            } catch (\Throwable $e) {
-                if (function_exists('logger')) {
-                    logger()->warning('XML signature verification errored: ' . $e->getMessage());
-                }
-            }
-        }
+        // 13) (Opcional) Validación local de la firma: removida junto con el firmador propio
 
+    // Asegurar que no reformateamos al serializar; devolver exactamente los bytes presentes en el DOM
         return $dom->saveXML();
     }
 

@@ -18,7 +18,9 @@
 /public/storage
 /storage/*.key
 /storage/pail
+/tools/hacienda-firmador-php
 /vendor
+scripts/deprecated/
 Homestead.json
 Homestead.yaml
 Thumbs.db

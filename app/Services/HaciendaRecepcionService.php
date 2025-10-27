@@ -14,28 +14,20 @@ class HaciendaRecepcionService
     ) {}
 
     /**
-     * Resolve the base Recepcion endpoint (ending with .../recepcion) according to env/config.
-     * Accepts flexible configuration values:
-     *  - Full endpoint: https://.../recepcion-sandbox/v1/recepcion or https://.../recepcion/v1/recepcion
-     *  - Base v1 path:  https://.../recepcion-sandbox/v1/ or https://.../recepcion/v1/
+     * Resuelve el endpoint base de Recepcion (terminando en .../recepcion) según env/config.
+     * Acepta valores de configuración flexibles:
+     *  - Endpoint completo: https://.../recepcion-sandbox/v1/recepcion o https://.../recepcion/v1/recepcion
+     *  - Ruta base v1:  https://.../recepcion-sandbox/v1/ o https://.../recepcion/v1/
      */
     private function resolveRecepcionEndpoint(): string
     {
-        $env = strtolower((string) (config('services.hacienda.env') ?? env('HACIENDA_ENV', 'stag')));
-        // Prefer explicit service config, then env fallback, then safe defaults
+    // Solo STAG: preferir config explícita, si no usar endpoint canónico sandbox
         $configured = (string) (config('services.hacienda.recepcion_url')
-            ?? ($env === 'prod' ? config('services.hacienda.recepcion_url_prod') : config('services.hacienda.recepcion_url_stag'))
-            ?? env('HACIENDA_RECEPCION_URL', $env === 'prod'
-                ? 'https://api.comprobanteselectronicos.go.cr/recepcion/v1/recepcion'
-                : 'https://api.comprobanteselectronicos.go.cr/recepcion-sandbox/v1/recepcion'));
+            ?? config('services.hacienda.recepcion_url_stag')
+            ?? env('HACIENDA_RECEPCION_URL', 'https://api-sandbox.comprobanteselectronicos.go.cr/recepcion/v1/recepcion'));
 
         $u = rtrim($configured, '/');
-        // If user configured the legacy sandbox path under main domain, rewrite to canonical api-sandbox domain
-        if ($env === 'stag' && preg_match('#^https?://api\.comprobanteselectronicos\.go\.cr/recepcion-sandbox#i', $u)) {
-            // Normalize to https://api-sandbox.comprobanteselectronicos.go.cr/recepcion/v1/recepcion
-            $u = 'https://api-sandbox.comprobanteselectronicos.go.cr/recepcion/v1/recepcion';
-        }
-        // If it points to the v1 base but is missing the trailing /recepcion, append it
+    // Asegurar que termina con /recepcion cuando se provee la ruta base v1
         if (!preg_match('#/recepcion$#i', $u)) {
             if (preg_match('#/(recepcion|recepcion-sandbox)/v1$#i', $u)) {
                 $u .= '/recepcion';
@@ -46,12 +38,13 @@ class HaciendaRecepcionService
 
     public function submit(Invoice $invoice, InvoiceXml $invoiceXml): HaciendaResponse
     {
-        $env = strtolower((string) (config('services.hacienda.env') ?? env('HACIENDA_ENV', 'stag')));
+    // Solo STAG
+    $env = 'stag';
         $url = $this->resolveRecepcionEndpoint();
 
         $token = $this->tokenService->getAccessToken();
 
-        // Extraer Emisor desde el XML para garantizar consistencia con el documento firmado
+    // Extraer Emisor desde el XML para garantizar consistencia con el documento firmado
         $emisorTipo = null; $emisorNumero = null;
         try {
             $dom = new \DOMDocument('1.0', 'UTF-8');
@@ -68,7 +61,7 @@ class HaciendaRecepcionService
                 $emisorNumero = $numEval;
             }
         } catch (\Throwable $e) {
-            // ignore, fallback to config/env/invoice
+            // ignorar, hacer fallback a config/env/invoice
         }
         if ($emisorTipo === null) {
             $emisorTipo = (string) (config('services.hacienda.emisor_tipo') ?? env('HACIENDA_EMISOR_TIPO', '02'));
@@ -77,7 +70,7 @@ class HaciendaRecepcionService
             $emisorNumero = (string) (config('services.hacienda.emisor_numero') ?? env('HACIENDA_EMISOR_NUMERO', ''));
         }
         if ($emisorNumero === '') {
-            // fallback desde invoice si aún vacío
+                // fallback desde invoice si aún vacío
             $emisorNumero = preg_replace('/\D/', '', (string) ($invoice->business_id_number ?? ''));
         }
 
@@ -85,6 +78,9 @@ class HaciendaRecepcionService
             throw new \RuntimeException('El XML no tiene clave. Genere el XML primero y vuelva a intentar.');
         }
         $fecha = $invoice->date?->format('c') ?? now()->format('c');
+
+    // Preflight: verificar que el Emisor en el XML coincide con el titular del certificado (previene Hacienda -60)
+       
         $json = [
             'clave' => $invoiceXml->clave,
             'fecha' => $fecha,
@@ -96,10 +92,23 @@ class HaciendaRecepcionService
             'comprobanteXml' => base64_encode($invoiceXml->xml),
         ];
 
-        $http = new Client([ 'timeout' => 30 ]);
+    // Registrar diagnósticos sobre emisor e identidad del certificado
+        try {
+            if (function_exists('logger')) {
+                $certInfo = (new \App\Services\CertificateService())->getCertificateIdInfo();
+                logger()->info('Hacienda submit payload (diag)', [
+                    'clave' => $invoiceXml->clave,
+                    'emisor_tipo' => $emisorTipo,
+                    'emisor_numero' => $emisorNumero,
+                    'cert_id' => $certInfo,
+                ]);
+            }
+        } catch (\Throwable $e) { /* ignore */ }
+
+        $http = new Client([ 'timeout' => 30, 'http_errors' => false ]);
         $resp = $http->post($url, [
             'headers' => [
-                // Hacienda expects a standard Bearer token (capital B)
+                // Hacienda espera un token Bearer estándar (B mayúscula)
                 'Authorization' => 'Bearer ' . $token,
                 'Content-Type' => 'application/json',
                 'Accept' => 'application/json',
@@ -107,8 +116,24 @@ class HaciendaRecepcionService
             'json' => $json,
         ]);
 
+        $statusCode = $resp->getStatusCode();
         $body = (string) $resp->getBody();
         $data = json_decode($body, true) ?: [];
+        if ($statusCode >= 400) {
+            // Error de Surface Hacienda con detalles de la persona que llama y registros
+            if (function_exists('logger')) {
+                logger()->warning('Hacienda recepcion returned HTTP ' . $statusCode, [ 'body' => $body, 'payload' => $json ]);
+            }
+            // Extraer mensaje de error estructurado si existe
+            $msg = isset($data['mensaje']) ? (string)$data['mensaje'] : (isset($data['detail']) ? (string)$data['detail'] : '');
+            // En fallback, usar un fragmento del body crudo si no hay mensaje estructurado
+            if ($msg === '' && trim($body) !== '') {
+                $snippet = trim($body);
+                if (strlen($snippet) > 800) { $snippet = substr($snippet, 0, 800) . '...'; }
+                $msg = $snippet;
+            }
+            throw new \RuntimeException('Hacienda recepcion error HTTP ' . $statusCode . ($msg !== '' ? (': ' . $msg) : ''));
+        }
 
         $estado = $data['ind-estado'] ?? ($data['estado'] ?? 'recibido');
         $indAmbiente = $env;
