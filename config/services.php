@@ -54,10 +54,20 @@ return [
           'cert_key_passphrase' => env('HACIENDA_CERT_KEY_PASSPHRASE', ''), // passphrase de la llave privada si aplica
           // Alternativa: PKCS#12 embebido en variable de entorno base64 (útil en CI/CD y repos públicos)
           'cert_p12_base64' => env('HACIENDA_CERT_P12_BASE64', ''),
+          // Use base64 PKCS#12 only when explicitly enabled (prevents accidental prod/stag mixups)
+          'use_p12_base64' => env('HACIENDA_USE_P12_BASE64', false),
           // Verificar firma local después de firmar (sanity check)
           'verify_signature_local' => env('HACIENDA_VERIFY_SIGNATURE_LOCAL', false),
           // Fallback de firma placeholder (solo para desarrollo). Por defecto desactivado para evitar múltiples firmas.
           'allow_placeholder_signature' => env('HACIENDA_ALLOW_PLACEHOLDER_SIGNATURE', false),
+          // Optional: path to alternate signer repo root (for A/B tests)
+          'alt_signer_dir' => env('HACIENDA_ALT_SIGNER_DIR', null),
+          // Enable using alternate signer in normal flow (via tools bridge)
+          'use_alt_signer' => env('HACIENDA_USE_ALT_SIGNER', false),
+          // Optional: explicit PHP CLI binary to invoke the bridge when running under web SAPI
+          'php_cli_path' => env('HACIENDA_PHP_CLI_PATH', null),
+          // Fail if certificate issuer doesn't match environment (SANDBOX vs PROD)
+          'fail_on_env_cert_mismatch' => env('HACIENDA_FAIL_ON_ENV_CERT_MISMATCH', true),
 
           // Entorno y credenciales API Hacienda
           'env' => env('HACIENDA_ENV', 'stag'), 
@@ -66,10 +76,13 @@ return [
           'client_id' => env('HACIENDA_CLIENT_ID', null), // opcional, se autodefine por env
           'client_id_stag' => env('HACIENDA_CLIENT_ID_STAG', 'api-stag'),
           'token_url' => env('HACIENDA_TOKEN_URL', null),
-          'token_url_stag' => env('HACIENDA_TOKEN_URL_STAG', 'https://idp.comprobanteselectronicos.go.cr/auth/realms/rut/protocol/openid-connect/token'),
+          // Canonical sandbox realm is rut-stag
+          'token_url_stag' => env('HACIENDA_TOKEN_URL_STAG', 'https://idp.comprobanteselectronicos.go.cr/auth/realms/rut-stag/protocol/openid-connect/token'),
+          // Explicit production realm
+          'token_url_prod' => env('HACIENDA_TOKEN_URL_PROD', 'https://idp.comprobanteselectronicos.go.cr/auth/realms/rut/protocol/openid-connect/token'),
           'recepcion_url' => env('HACIENDA_RECEPCION_URL', null),
-          'recepcion_url_stag' => env('HACIENDA_RECEPCION_URL_STAG', 'https://api.comprobanteselectronicos.go.cr/recepcion-sandbox/v1/'),
-          'recepcion_base_stag' => env('HACIENDA_RECEPCION_BASE_STAG', 'https://api.comprobanteselectronicos.go.cr'),
+          // Canonical sandbox recepcion endpoint (prefer api-sandbox domain)
+          'recepcion_url_stag' => env('HACIENDA_RECEPCION_URL_STAG', 'https://api-sandbox.comprobanteselectronicos.go.cr/recepcion/v1/recepcion'),
           'emisor_tipo' => env('HACIENDA_EMISOR_TIPO', '01'),
           'emisor_numero' => env('HACIENDA_EMISOR_NUMERO', ''),
     ],

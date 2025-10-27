@@ -128,7 +128,6 @@ class InvoiceController extends Controller
         try {
             $xsdPath = base_path('TiqueteElectronico_V4.4.xsd');
             $validator = new \App\Services\XmlValidatorService();
-            $signer = new \App\Services\SignXmlService();
 
             $schemaValid = null; $errors = [];
             if (file_exists($xsdPath)) {
@@ -144,8 +143,7 @@ class InvoiceController extends Controller
             $clave = trim((string)$xpath->evaluate('string(//fe:Clave)'));
 
             // Verificación de firma 
-            $signatureValid = null;
-            try { $signatureValid = $signer->verify($dom); } catch (\Throwable $e) { $signatureValid = null; }
+            $signatureValid = null; // verificación local removida junto al firmador propio
 
             $invoice->xmls()->create([
                 'clave' => $clave ?: null,
@@ -192,6 +190,54 @@ class InvoiceController extends Controller
         $schemaLocation = trim((string)$dom->documentElement->getAttributeNS('http://www.w3.org/2001/XMLSchema-instance', 'schemaLocation'));
         $hasSignature = (bool)$xpath->evaluate('count(//ds:Signature)') > 0;
 
+        // Extract embedded signing certificate identity (subject serialNumber) for diagnostics
+        $sigCert = [ 'subject' => null, 'issuer' => null, 'serial' => null, 'tipo' => null, 'numero' => null ];
+        try {
+            $certNode = $xpath->query('//ds:Signature//ds:X509Data/ds:X509Certificate')->item(0);
+            if ($certNode instanceof \DOMElement) {
+                $b64 = trim($certNode->textContent);
+                $der = base64_decode($b64, true);
+                if ($der !== false) {
+                    // Re-wrap to PEM for openssl parser
+                    $pem = "-----BEGIN CERTIFICATE-----\n" . chunk_split(base64_encode($der), 64, "\n") . "-----END CERTIFICATE-----\n";
+                    $x = @openssl_x509_read($pem);
+                    if ($x) {
+                        $info = @openssl_x509_parse($x) ?: [];
+                        $subj = $info['subject'] ?? [];
+                        $issuer = $info['issuer'] ?? [];
+                        $sigCert['subject'] = is_array($subj) ? json_encode($subj, JSON_UNESCAPED_UNICODE) : (string)$subj;
+                        $sigCert['issuer'] = is_array($issuer) ? json_encode($issuer, JSON_UNESCAPED_UNICODE) : (string)$issuer;
+                        $sigCert['serial'] = $info['serialNumber'] ?? ($info['serialNumberHex'] ?? null);
+                        // Infer tipo/numero from subject.serialNumber (CPF/CPJ/DIMEX/NITE)
+                        $serialAttr = null;
+                        if (isset($subj['serialNumber'])) {
+                            $serialAttr = is_array($subj['serialNumber']) ? reset($subj['serialNumber']) : $subj['serialNumber'];
+                        } elseif (isset($subj['OID.2.5.4.5'])) {
+                            $serialAttr = is_array($subj['OID.2.5.4.5']) ? reset($subj['OID.2.5.4.5']) : $subj['OID.2.5.4.5'];
+                        } elseif (isset($subj['2.5.4.5'])) {
+                            $serialAttr = is_array($subj['2.5.4.5']) ? reset($subj['2.5.4.5']) : $subj['2.5.4.5'];
+                        }
+                        $upper = $serialAttr && is_string($serialAttr) ? strtoupper($serialAttr) : '';
+                        if ($upper !== '' && preg_match('/\bCPF[-:\s]*([0-9\-]+)/', $upper, $m)) {
+                            $sigCert['tipo'] = '01';
+                            $sigCert['numero'] = preg_replace('/\D/', '', $m[1]);
+                        } elseif ($upper !== '' && preg_match('/\bCPJ[-:\s]*([0-9\-]+)/', $upper, $m)) {
+                            $sigCert['tipo'] = '02';
+                            $sigCert['numero'] = preg_replace('/\D/', '', $m[1]);
+                        } elseif ($upper !== '' && preg_match('/\bDIMEX[-:\s]*([0-9\-]+)/', $upper, $m)) {
+                            $sigCert['tipo'] = '03';
+                            $sigCert['numero'] = preg_replace('/\D/', '', $m[1]);
+                        } elseif ($upper !== '' && preg_match('/\bNITE[-:\s]*([0-9\-]+)/', $upper, $m)) {
+                            $sigCert['tipo'] = '04';
+                            $sigCert['numero'] = preg_replace('/\D/', '', $m[1]);
+                        }
+                    }
+                }
+            }
+        } catch (\Throwable $e) {
+            // ignore diag errors
+        }
+
         return response()->json([
             'id' => $xmlRecord->id,
             'clave' => $xmlRecord->clave,
@@ -206,6 +252,7 @@ class InvoiceController extends Controller
                 'EmisorNumero' => $emisorNumero,
                 'xsi:schemaLocation' => $schemaLocation,
                 'hasSignatureNode' => $hasSignature,
+                'SignatureCert' => $sigCert,
             ],
         ]);
     }

@@ -128,6 +128,7 @@ Route::prefix('v1')->group(function () {
 
         // ------------------ CABYS ------------------
     Route::get('cabys', [CabysController::class, 'index']); 
+    Route::get('cabys/search', [CabysController::class, 'search']);
     Route::get('cabys/{code}', [CabysController::class, 'show']); 
     Route::get('cabys-categories', [CabysController::class, 'categories']);
 
