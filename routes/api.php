@@ -17,6 +17,7 @@ use App\Http\Controllers\ProviderController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CabysController;
 use App\Http\Controllers\UnitController;
+use App\Http\Controllers\IAHistoryController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -104,8 +105,11 @@ Route::prefix('v1')->group(function () {
     Route::post('cash-register/addCashSale', [CashRegisterController::class, 'addCashSale']);
     Route::post('/cash-registers/create-empty', [CashRegisterController::class, 'createEmpty']);
 
-
-
+    // ------------------ IA History ------------------
+    Route::get('ia-history', [IAHistoryController::class, 'index']); // Listar todos o filtrar por tipo (?type=diario|anual)
+    Route::post('ia-history', [IAHistoryController::class, 'store']); // Crear nuevo historial
+    Route::get('ia-history/{type}', [IAHistoryController::class, 'show']); // Mostrar historial por tipo (diario/anual)
+    Route::delete('ia-history/{id}', [IAHistoryController::class, 'destroy']); // Eliminar historial por id
 
 
     // ------------------ Providers ------------------
