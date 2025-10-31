@@ -85,4 +85,38 @@ class ProductController extends Controller
         $product->delete();
         return response()->json(null, 204);
     }
+
+    public function availableByWarehouse()
+{
+    // Traer solo productos con stock > 0
+    $products = Product::with('bodega', 'unit')
+        ->where('stock', '>', 0)
+        ->get();
+
+    // Agrupar por bodega_id
+    $report = $products->groupBy('bodega_id')
+        ->map(function ($items, $bodega_id) {
+            return [
+                'bodega_id' => $bodega_id,
+                'bodega_nombre' => $items->first()->bodega->nombre ?? null,
+                'total_products' => $items->count(),
+                'total_stock' => $items->sum('stock'),
+                'products' => $items->map(function ($p) {
+                    return [
+                        'id' => $p->id,
+                        'codigo_producto' => $p->codigo_producto,
+                        'nombre_producto' => $p->nombre_producto,
+                        'categoria' => $p->categoria,
+                        'stock' => $p->stock,
+                        'precio_compra' => $p->precio_compra,
+                        'precio_venta' => $p->precio_venta,
+                        'unit' => $p->unit->nombre ?? null,
+                    ];
+                }),
+            ];
+        })->values();
+
+    return response()->json($report);
+}
+
 }
