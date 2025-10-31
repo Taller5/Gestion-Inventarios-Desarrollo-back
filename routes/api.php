@@ -18,6 +18,7 @@ use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\CabysController;
 use App\Http\Controllers\UnitController;
 use App\Http\Controllers\IAHistoryController;
+use App\Http\Controllers\PromotionController;
 
 Route::get('/user', function (Request $request) {
     return $request->user();
@@ -70,6 +71,8 @@ Route::prefix('v1')->group(function () {
     Route::post('products', [ProductController::class, 'store']);
     Route::put('products/{id}', [ProductController::class, 'update']);
     Route::delete('products/{id}', [ProductController::class, 'destroy']);
+  
+
 
     // ------------------ Batch ------------------
     Route::get('batch', [BatchController::class, 'index']);
@@ -134,6 +137,22 @@ Route::prefix('v1')->group(function () {
 
     // ------------------ Units (Unidades de medida) ------------------
     Route::get('units', [UnitController::class, 'index']);     
+
+
+    // ------------------ Promotions ------------------
+            Route::get('promotions', [PromotionController::class, 'index']);       // Listar todas
+         
+            Route::post('promotions', [PromotionController::class, 'store']);      // Crear promoción
+            Route::put('promotions/{id}', [PromotionController::class, 'update']); // Actualizar promoción
+            Route::delete('promotions/{id}', [PromotionController::class, 'destroy']); // Eliminar promoción
+            Route::get('promotions/{id}/products', [PromotionController::class, 'products']); // Obtener productos de una promoción específica
+            // ------------------ Promotions para SalePages ------------------
+            Route::get('promotions/active', [PromotionController::class, 'activePromotions']);//buscar promociones activas
+            Route::post('promotions/reduce-stock', [PromotionController::class, 'reducePromotionStock']);//reducir cantidad de stock
+            Route::post('promotions/apply', [PromotionController::class, 'applyPromotions']);//aplicar promociones a una venta
+            Route::get('promotions/{id}', [PromotionController::class, 'show']);   // Mostrar una promoción
+
+
 });
 
 
