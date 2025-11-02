@@ -104,53 +104,69 @@ class PromotionController extends Controller
 
     /**
      * Actualizar promoción y sus productos
-     */
-    public function update(Request $request, $id)
-    {
-        $promotion = Promotion::findOrFail($id);
+     *//**
+ * Actualizar promoción y sus productos
+ */
+public function update(Request $request, $id)
+{
+    $promotion = Promotion::findOrFail($id);
 
-        $validated = $request->validate([
-            'nombre' => 'sometimes|string|max:255',
-            'descripcion' => 'nullable|string',
-            'tipo' => 'sometimes|in:porcentaje,fijo,combo',
-            'valor' => 'nullable|numeric',
-            'fecha_inicio' => 'sometimes|date',
-            'fecha_fin' => 'sometimes|date|after_or_equal:fecha_inicio',
-            'activo' => 'boolean',
-            'products' => 'nullable|array',
-            'products.*.product_id' => 'required|integer|exists:products,id',
-            'products.*.cantidad' => 'nullable|integer|min:1',
-            'products.*.descuento' => 'nullable|numeric|min:0',
-            'business_id' => 'nullable|integer|exists:businesses,negocio_id',
-            'branch_id' => 'nullable|integer|exists:branches,sucursal_id',
-        ]);
+    $validated = $request->validate([
+        'nombre' => 'sometimes|string|max:255',
+        'descripcion' => 'nullable|string',
+        'tipo' => 'sometimes|in:porcentaje,fijo,combo',
+        'valor' => 'nullable|numeric',
+        'fecha_inicio' => 'sometimes|date',
+        'fecha_fin' => 'sometimes|date|after_or_equal:fecha_inicio',
+        'activo' => 'boolean',
+        'products' => 'nullable|array',
+        'products.*.product_id' => 'required|integer|exists:products,id',
+        'products.*.cantidad' => 'nullable|integer|min:0',
+        'products.*.descuento' => 'nullable|numeric|min:0',
+        'business_id' => 'nullable|integer|exists:businesses,negocio_id',
+        'branch_id' => 'nullable|integer|exists:branches,sucursal_id',
+    ]);
 
-        DB::beginTransaction();
-        try {
-            $promotion->update($validated);
+    DB::beginTransaction();
+    try {
+        // Actualizar datos generales
+        $promotion->update($validated);
 
-            if (isset($validated['products'])) {
-                $syncData = [];
-                foreach ($validated['products'] as $p) {
-                    $syncData[$p['product_id']] = [
-                        'cantidad' => $p['cantidad'] ?? 1,
-                        'descuento' => $p['descuento'] ?? 0,
-                    ];
-                }
-                $promotion->products()->sync($syncData);
+        // Actualizar productos y stock
+        if (isset($validated['products'])) {
+            $syncData = [];
+            foreach ($validated['products'] as $p) {
+                $syncData[$p['product_id']] = [
+                    'cantidad' => $p['cantidad'] ?? 0, // si no viene, 0
+                    'descuento' => $p['descuento'] ?? 0,
+                ];
             }
-
-            DB::commit();
-            return response()->json($promotion->load('products'));
-
-        } catch (\Exception $e) {
-            DB::rollBack();
-            return response()->json([
-                'error' => 'Error al actualizar la promoción',
-                'details' => $e->getMessage()
-            ], 500);
+            $promotion->products()->sync($syncData);
         }
+
+        // 🔹 Detectar si la promoción debe estar activa según stock
+        $activo = true;
+        foreach ($promotion->products as $prod) {
+            if (($prod->pivot->cantidad ?? 0) <= 0) {
+                $activo = false; // si algún producto tiene 0 stock, desactivar
+                break;
+            }
+        }
+        $promotion->activo = $activo;
+        $promotion->save();
+
+        DB::commit();
+        return response()->json($promotion->load('products'));
+
+    } catch (\Exception $e) {
+        DB::rollBack();
+        return response()->json([
+            'error' => 'Error al actualizar la promoción',
+            'details' => $e->getMessage()
+        ], 500);
     }
+}
+
 
     /**
      * Eliminar promoción
@@ -231,7 +247,6 @@ public function activePromotions(Request $request)
     }
 
 
-
 public function applyPromotions(Request $request)
 {
     DB::beginTransaction();
@@ -251,7 +266,6 @@ public function applyPromotions(Request $request)
             $q->select('products.id', 'products.nombre_producto')
               ->withPivot(['descuento', 'cantidad']);
         }])
-        ->where('activo', true)
         ->where('business_id', $validated['business_id'])
         ->where(function ($q) use ($validated) {
             $q->whereNull('branch_id')
@@ -261,25 +275,13 @@ public function applyPromotions(Request $request)
         ->whereDate('fecha_fin', '>=', $today)
         ->get();
 
-        if ($promotions->isEmpty()) {
-            return response()->json([
-                'success' => true,
-                'aplico_alguna' => false,
-                'carrito' => $validated['carrito'],
-                'message' => 'No hay promociones activas para este negocio o sucursal.',
-            ]);
-        }
-
         $carrito = collect($validated['carrito']);
         $carritoIds = $carrito->pluck('producto_id')->toArray();
 
         $carritoConPromos = $carrito->map(function ($item) use ($promotions, $carritoIds) {
             $productoId = $item['producto_id'];
-            $cantidad = $item['cantidad'];
 
-            $promos = $promotions->filter(fn($p) => 
-                $p->products->contains('id', $productoId)
-            );
+            $promos = $promotions->filter(fn($p) => $p->products->contains('id', $productoId));
 
             if ($promos->isEmpty()) {
                 return array_merge($item, [
@@ -304,21 +306,15 @@ public function applyPromotions(Request $request)
                 }
 
                 $pivot = $promo->products->firstWhere('id', $productoId)?->pivot;
-                $descuento = 0;
+                $stock = $pivot->cantidad ?? 0;
 
-                switch ($promo->tipo) {
-                    case 'porcentaje':
-                        $descuento = $pivot?->descuento ?? $promo->valor ?? 0;
-                        break;
+                if ($stock <= 0) continue;
 
-                    case 'fijo':
-                        $descuento = $pivot?->descuento ?? $promo->valor ?? 0;
-                        break;
-
-                    case 'combo':
-                        $descuento = $pivot?->descuento ?? ($promo->valor ? $promo->valor / max(count($productosPromo), 1) : 0);
-                        break;
-                }
+                $descuento = match($promo->tipo) {
+                    'porcentaje', 'fijo' => $pivot->descuento ?? $promo->valor ?? 0,
+                    'combo' => $pivot->descuento ?? ($promo->valor ? $promo->valor / max(count($productosPromo), 1) : 0),
+                    default => 0,
+                };
 
                 if ($descuento > $descuentoFinal) {
                     $descuentoFinal = $descuento;
@@ -333,7 +329,7 @@ public function applyPromotions(Request $request)
                     'descuento' => 0,
                     'promocion_id' => null,
                     'promocion_aplicada' => null,
-                    'motivo_no_aplica' => 'No cumple condiciones del combo o promoción.',
+                    'motivo_no_aplica' => 'No hay stock o no cumple condiciones.',
                 ]);
             }
 
@@ -346,28 +342,15 @@ public function applyPromotions(Request $request)
             ]);
         });
 
-        // 🔹 Reducir stock del pivot y desactivar promociones si algún producto llega a 0
-        foreach ($carritoConPromos as $item) {
-            if (!($item['aplicada'] ?? false) || empty($item['promocion_id'])) continue;
-
-            $promo = Promotion::find($item['promocion_id']);
-            if (!$promo) continue;
-
-            $pivotRecord = $promo->products()->where('product_id', $item['producto_id'])->first();
-            if (!$pivotRecord) continue;
-
-            $pivot = $pivotRecord->pivot;
-            $stockActual = $pivot->cantidad ?? 0;
-            $nuevaCantidad = max(0, $stockActual - $item['cantidad']);
-
-            $promo->products()->updateExistingPivot($item['producto_id'], [
-                'cantidad' => $nuevaCantidad
-            ]);
-
-            // 🔹 Si la cantidad de cualquier producto de la promoción llega a 0, desactivar la promoción
-            if ($nuevaCantidad === 0) {
-                $promo->activo = false;
-                $promo->save();
+        //  Solo actualizar stock de los productos, sin tocar "activo"
+        foreach ($promotions as $promo) {
+            foreach ($promo->products as $prod) {
+                $itemCarrito = $carrito->firstWhere('producto_id', $prod->id);
+                if ($itemCarrito) {
+                    $stockActual = $prod->pivot->cantidad ?? 0;
+                    $nuevoStock = max(0, $stockActual - $itemCarrito['cantidad']);
+                    $promo->products()->updateExistingPivot($prod->id, ['cantidad' => $nuevoStock]);
+                }
             }
         }
 
@@ -383,6 +366,7 @@ public function applyPromotions(Request $request)
                 ? 'Promociones aplicadas y stock actualizado correctamente.'
                 : 'Ningún producto califica para promoción',
         ]);
+
     } catch (\Throwable $e) {
         DB::rollBack();
         return response()->json([
@@ -392,6 +376,7 @@ public function applyPromotions(Request $request)
         ], 500);
     }
 }
+
 
 public function restorePromotionStock(Request $request)
 {
@@ -442,7 +427,7 @@ public function restorePromotionStock(Request $request)
                 'cantidad' => $nuevaCantidad
             ]);
 
-            \Log::info('✅ Stock restaurado en promoción', [
+            \Log::info(' Stock restaurado en promoción', [
                 'promocion_id' => $promoId,
                 'producto_id' => $productoId,
                 'stock_anterior' => $stockActual,
@@ -454,7 +439,7 @@ public function restorePromotionStock(Request $request)
         DB::commit();
 
         //  Limpiar carrito: se devuelve vacío al frontend
-        \Log::info('🧹 Carrito limpiado después de restaurar promociones');
+        \Log::info(' Carrito limpiado después de restaurar promociones');
 
         return response()->json([
             'success' => true,
