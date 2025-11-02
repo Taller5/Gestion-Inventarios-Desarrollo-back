@@ -148,9 +148,11 @@ Route::prefix('v1')->group(function () {
             Route::get('promotions/{id}/products', [PromotionController::class, 'products']); // Obtener productos de una promoción específica
             // ------------------ Promotions para SalePages ------------------
             Route::get('promotions/active', [PromotionController::class, 'activePromotions']);//buscar promociones activas
-            Route::post('promotions/reduce-stock', [PromotionController::class, 'reducePromotionStock']);//reducir cantidad de stock
+       
             Route::post('promotions/apply', [PromotionController::class, 'applyPromotions']);//aplicar promociones a una venta
+            Route::post('promotions/restore', [PromotionController::class, 'restorePromotionStock']);//restaurar cantidad de stock
             Route::get('promotions/{id}', [PromotionController::class, 'show']);   // Mostrar una promoción
+           
 
 
 });
