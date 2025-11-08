@@ -27,12 +27,22 @@ class SignerService
                 $tipo = trim((string)$xp->evaluate('string(//fe:Emisor/fe:Identificacion/fe:Tipo)'));
                 $num  = preg_replace('/\D/', '', (string)$xp->evaluate('string(//fe:Emisor/fe:Identificacion/fe:Numero)'));
                 if ($tipo !== '' && $num !== '') {
-                    // Leer el certificado configurado para inferir la identidad
+                    // Leer el certificado configurado para inferir la identidad.
+                    // Soportar ambos modos: archivo físico o base64 en entorno.
                     $p12CheckPath = (string) (config('services.hacienda.cert_p12_path') ?? env('HACIENDA_CERT_P12_PATH', ''));
                     $p12CheckPath = function_exists('base_path') ? base_path($p12CheckPath) : $p12CheckPath;
                     $pinCheck = (string) (config('services.hacienda.cert_password') ?? env('HACIENDA_CERT_PASSWORD', ''));
+                    $useB64Check = (bool) (config('services.hacienda.use_p12_base64') ?? filter_var(env('HACIENDA_USE_P12_BASE64', 'false'), FILTER_VALIDATE_BOOL));
+                    $p12B64Check = (string) (config('services.hacienda.cert_p12_base64') ?? env('HACIENDA_CERT_P12_BASE64', ''));
                     $certsCheck = [];
-                    if ($p12CheckPath !== '' && is_file($p12CheckPath) && @openssl_pkcs12_read(@file_get_contents($p12CheckPath), $certsCheck, $pinCheck)) {
+                    $p12Raw = null;
+                    if ($useB64Check && $p12B64Check !== '') {
+                        $decoded = base64_decode($p12B64Check, true);
+                        if ($decoded !== false) { $p12Raw = $decoded; }
+                    } elseif ($p12CheckPath !== '' && is_file($p12CheckPath)) {
+                        $p12Raw = @file_get_contents($p12CheckPath) ?: null;
+                    }
+                    if ($p12Raw && @openssl_pkcs12_read($p12Raw, $certsCheck, $pinCheck)) {
                         if (!empty($certsCheck['cert'])) {
                             $x = @openssl_x509_read($certsCheck['cert']);
                             $info = $x ? (@openssl_x509_parse($x) ?: []) : [];
@@ -47,7 +57,7 @@ class SignerService
                             elseif ($upper !== '' && preg_match('/\bCPJ[-:\s]*([0-9\-]+)/', $upper, $m)) { $cTipo = '02'; $cNum = preg_replace('/\D/', '', $m[1]); }
                             elseif ($upper !== '' && preg_match('/\bDIMEX[-:\s]*([0-9\-]+)/', $upper, $m)) { $cTipo = '03'; $cNum = preg_replace('/\D/', '', $m[1]); }
                             elseif ($upper !== '' && preg_match('/\bNITE[-:\s]*([0-9\-]+)/', $upper, $m)) { $cTipo = '04'; $cNum = preg_replace('/\D/', '', $m[1]); }
-
+                            // (Opcional) Aquí podríamos comparar $cTipo/$cNum con $tipo/$num si se desea forzar coincidencia.
                         }
                     }
                 }

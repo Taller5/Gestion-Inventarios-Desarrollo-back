@@ -1,0 +1,3 @@
+[submodule "sign-tool"]
+	path = sign-tool
+	url = https://github.com/Taller5/hacienda-firmador-php.git

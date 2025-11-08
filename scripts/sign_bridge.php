@@ -1,6 +1,22 @@
 <?php
-// Bridge script to sign an XML using the alternate signer in isolation.
-// Usage: php scripts/sign_bridge.php <alt_dir> <p12_path> <pin> <in_xml_path> <out_xml_path>
+/*
+ * Puente (bridge) para firmar un XML usando el firmador alternativo en un proceso aislado.
+ *
+ * Este archivo carga e invoca dinámicamente el firmador de terceros licenciado bajo AGPL
+ * desde el directorio proporcionado como primer argumento (HACIENDA_ALT_SIGNER_DIR).
+ *
+ * Nota de licencia:
+ * - Este puente está pensado para mantener el firmador ejecutándose en un proceso CLI separado,
+ *   de modo que la aplicación principal de Laravel no sea una obra derivada del firmador.
+ * - Debido a que este script incluye/carga el punto de entrada del firmador dentro de ese proceso
+ *   separado, considera este puente como un componente compatible con la AGPL.
+ * - Revisa THIRD_PARTY_NOTICES.md para atribución y detalles de licencia.
+ *
+ * SPDX-License-Identifier: AGPL-3.0-only
+ * Copyright (c) 2025 Taller5 (solo el contenedor/puente)
+ *
+ * Uso: php scripts/sign_bridge.php <alt_dir> <p12_path> <pin> <in_xml_path> <out_xml_path>
+ */
 
 // Ensure we are running under CLI; if not, fail with a clear message.
 if (php_sapi_name() !== 'cli') {
