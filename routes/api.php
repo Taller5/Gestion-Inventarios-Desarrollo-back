@@ -19,12 +19,13 @@ use App\Http\Controllers\CabysController;
 use App\Http\Controllers\UnitController;
 use App\Http\Controllers\IAHistoryController;
 use App\Http\Controllers\PromotionController;
+use App\Http\Controllers\EgressController;
 
-Route::get('/user', function (Request $request) {
-    return $request->user();
-})->middleware('auth:sanctum');
+    Route::get('/user', function (Request $request) {
+        return $request->user();
+    })->middleware('auth:sanctum');
 
-Route::prefix('v1')->group(function () {
+    Route::prefix('v1')->group(function () {
 
      // ------------------ Employees (Users) ------------------
     Route::get('employees', [UserController::class, 'index']);
@@ -152,9 +153,11 @@ Route::prefix('v1')->group(function () {
             Route::post('promotions/apply', [PromotionController::class, 'applyPromotions']);//aplicar promociones a una venta
             Route::post('promotions/restore', [PromotionController::class, 'restorePromotionStock']);//restaurar cantidad de stock
             Route::get('promotions/{id}', [PromotionController::class, 'show']);   // Mostrar una promoción
-           
 
-
+            Route::get('egresos', [EgressController::class, 'index']); // Listar todos los egresos
+                Route::get('egresos/{id}', [EgressController::class, 'show']); // Mostrar un egreso
+                Route::post('egresos', [EgressController::class, 'store']); // Crear un egreso
+                Route::delete('egresos/{id}', [EgressController::class, 'destroy']); // Eliminar un egreso
 });
 
 
