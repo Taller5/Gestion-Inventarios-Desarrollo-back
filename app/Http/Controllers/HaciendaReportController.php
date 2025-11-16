@@ -39,8 +39,8 @@ class HaciendaReportController extends Controller
 
         $invoices = $query->orderByDesc('date')->paginate(50);
 
-        // Formatear respuesta para frontend
-        $result = $invoices->map(function ($invoice) {
+        // Mapear la colección interna del paginator de forma segura
+        $collection = $invoices->getCollection()->map(function ($invoice) {
             $xml = $invoice->xmls->last(); // último XML generado
             $response = $invoice->responses->last(); // última respuesta Hacienda
             // Preferir relación Business.nombre_comercial, si no existe usar campos en la factura
@@ -52,9 +52,9 @@ class HaciendaReportController extends Controller
 
             return [
                 'id' => $invoice->id,
-                'business' => $businessName,
+                'business' => (string) ($businessName ?? ''),
                 'document_type' => $invoice->document_type,
-                'date' => $invoice->date,
+                'date' => optional($invoice->date)->toIsoString(),
                 'clave' => $xml ? $xml->clave : null,
                 'xml_download_url' => $xml ? route('xml.download', ['id' => $xml->id]) : null,
                 'response_xml' => $response ? $response->respuesta_xml : null,
@@ -64,8 +64,11 @@ class HaciendaReportController extends Controller
             ];
         });
 
+        // Reemplazar la colección del paginator por la transformada
+        $invoices->setCollection($collection);
+
         return response()->json([
-            'data' => $result,
+            'data' => $invoices->getCollection()->values(),
             'pagination' => [
                 'total' => $invoices->total(),
                 'per_page' => $invoices->perPage(),
