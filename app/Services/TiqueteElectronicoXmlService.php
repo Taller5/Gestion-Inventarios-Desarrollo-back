@@ -9,7 +9,7 @@ use DOMElement;
 
 use App\Services\CertificateService;
 
-class FacturaElectronicaXmlService
+class TiqueteElectronicoXmlService
 {
     private CertificateService $certSvc;
     private ?SignerService $Signer = null;
@@ -24,24 +24,24 @@ class FacturaElectronicaXmlService
         }
     }
     /**
-     * Genera el XML de Factura Electrónica versión 4.4 para Hacienda CR (documento 01).
+     * Genera el XML de Factura Electrónica versión 4.4 para Hacienda CR.
      * @param Invoice $invoice
      * @return string XML generado (con <?xml ... ?> y UTF-8)
      */
     public function generarXml(Invoice $invoice): string
     {
         // --- Generar todo el XML con DOMDocument y createElementNS ---
-        // Namespace específico de Factura Electrónica v4.4 según XSD oficial
-        $ns = 'https://cdn.comprobanteselectronicos.go.cr/xml-schemas/v4.4/facturaElectronica';
-        $dom = new DOMDocument('1.0', 'UTF-8');
+    // Namespace específico de Tiquete Electrónico v4.4 según XSD oficial
+    $ns = 'https://cdn.comprobanteselectronicos.go.cr/xml-schemas/v4.4/tiqueteElectronico';
+    $dom = new DOMDocument('1.0', 'UTF-8');
     // IMPORTANTE: No formatear (pretty-print); preservar los espacios en blanco para evitar alterar los bytes firmados
     $dom->preserveWhiteSpace = true;
     $dom->formatOutput = false; // sin pretty-print
 
-        // Crear nodo raíz con namespace por defecto
-        // Factura electrónica (document_type 01)
-        $docType = '01';
-        $root = $dom->createElementNS($ns, 'FacturaElectronica');
+    // Crear nodo raíz con namespace por defecto
+    // Sólo generamos tiquete electrónico (document_type forzado a 04)
+    $docType = '04';
+    $root = $dom->createElementNS($ns, 'TiqueteElectronico');
         $dom->appendChild($root);
 
         // Asegurar namespace por defecto y declarar explícitamente los prefijos usados por atributos/elementos:
@@ -53,18 +53,18 @@ class FacturaElectronicaXmlService
     $root->setAttributeNS('http://www.w3.org/2000/xmlns/', 'xmlns:xsd', 'http://www.w3.org/2001/XMLSchema');
 
 
-        // Seleccionar XSD para Factura. Permite configurar por env:
-        // HACIENDA_SCHEMA_FACTURA_LOCATION primero, luego schema_location genérico, fallback nombre local.
+        // Seleccionar XSD según tipo (ahora sólo tiquete). Permite configurar por env:
+        // HACIENDA_SCHEMA_TIQUETE_LOCATION primero, luego schema_location genérico, fallback nombre local.
         $schemaLocation = (string) (
-            config('services.hacienda.schema_factura_location')
-            ?? getenv('HACIENDA_SCHEMA_FACTURA_LOCATION')
+            config('services.hacienda.schema_tiquete_location')
+            ?? getenv('HACIENDA_SCHEMA_TIQUETE_LOCATION')
             ?? config('services.hacienda.schema_location')
             ?? getenv('HACIENDA_SCHEMA_LOCATION')
-            ?: 'FacturaElectronica_V4.4.xsd'
+            ?: 'TiqueteElectronico_V4.4.xsd'
         );
-        $root->setAttributeNS('http://www.w3.org/2001/XMLSchema-instance', 'xsi:schemaLocation', $ns . ' ' . $schemaLocation);
+    $root->setAttributeNS('http://www.w3.org/2001/XMLSchema-instance', 'xsi:schemaLocation', $ns . ' ' . $schemaLocation);
 
-        // No attribute Id/id en el root
+    // No attribute Id/id en el root: el XSD de tiquete no define atributos en el raíz.
     if ($root->hasAttribute('Id')) { $root->removeAttribute('Id'); }
     if ($root->hasAttribute('id')) { $root->removeAttribute('id'); }
 
@@ -115,7 +115,7 @@ class FacturaElectronicaXmlService
         }
         // Terminal en XSD usa 5 dígitos
         $terminal = str_pad((string) ($terminalId ?? ($invoice->terminal ?? '002')), 5, '0', STR_PAD_LEFT);
-    $tipoDoc = '01'; // Factura
+        $tipoDoc = '04'; // Tiquete
         $numeroSec = str_pad((string) ((int) ($invoice->sequential ?? $invoice->id ?? 1)), 10, '0', STR_PAD_LEFT);
         $numeroConsecutivo = "{$sucursal}{$terminal}{$tipoDoc}{$numeroSec}";
         $situacionComprobante = '1';
@@ -149,19 +149,7 @@ class FacturaElectronicaXmlService
             : (string)($tipoIdEmisorCfg ?: ($invoice->business_id_type ?? '01'));
         $tipoIdEmisor = $this->sanitizeIdentType(preg_replace('/\D/', '', $tipoIdEmisorRaw), '01');
     // Nombre emisor: min 5, max 100. Para persona física, si no viene un nombre razonable, usar CN del certificado.
-    // Intentar obtener datos del emisor desde la tabla customers por número de identificación
-    $emisorCustomer = null;
-    try {
-        $emisorCustomer = \App\Models\Customer::where('identity_number', $emisorNumeroDoc)->first();
-        if (!$emisorCustomer && !empty($invoice->business_id_number)) {
-            $rawId = preg_replace('/\D/', '', (string)$invoice->business_id_number);
-            if ($rawId) {
-                $emisorCustomer = \App\Models\Customer::where('identity_number', $rawId)->first();
-            }
-        }
-    } catch (\Throwable $e) { /* ignore */ }
-
-    $nombreEmisorRaw = trim((string)($emisorCustomer->name ?? ($invoice->business_name ?? '')));
+    $nombreEmisorRaw = trim((string)($invoice->business_name ?? ''));
     if ($nombreEmisorRaw === '' || mb_strlen($nombreEmisorRaw, 'UTF-8') < 5) {
         try {
             $cn = $this->certSvc->getCertificateSubjectCN();
@@ -196,52 +184,19 @@ class FacturaElectronicaXmlService
         $ubic->appendChild($dom->createElementNS($ns, 'OtrasSenas', substr($invoice->address ?? 'Sin direccion', 0, 160)));
         $emisor->appendChild($ubic);
         
-        $telefonoEmisor = $invoice->business_phone ?? ($emisorCustomer->phone ?? null);
-        if (!empty($telefonoEmisor)) {
+        if (!empty($invoice->business_phone)) {
             $tel = $dom->createElementNS($ns, 'Telefono');
             $tel->appendChild($dom->createElementNS($ns, 'CodigoPais', '506'));
-            $tel->appendChild($dom->createElementNS($ns, 'NumTelefono', preg_replace('/\D/', '', (string)$telefonoEmisor)));
+            $tel->appendChild($dom->createElementNS($ns, 'NumTelefono', preg_replace('/\D/', '', $invoice->business_phone)));
             $emisor->appendChild($tel);
         }
-        $correoEmisor = $invoice->business_email ?? ($emisorCustomer->email ?? null);
-        if (!empty($correoEmisor)) {
-            $emisor->appendChild($dom->createElementNS($ns, 'CorreoElectronico', substr((string)$correoEmisor, 0, 160)));
+        
+        if (!empty($invoice->business_email)) {
+            $emisor->appendChild($dom->createElementNS($ns, 'CorreoElectronico', substr($invoice->business_email, 0, 160)));
         }
         $root->appendChild($emisor);
 
-        // 4) Receptor (requerido en la mayoría de los casos para Factura)
-        $receptor = $dom->createElementNS($ns, 'Receptor');
-        // Intentar cargar receptor desde customers por identity_number del invoice
-        $receptorCustomer = null;
-        try {
-            $numIdRecLookup = preg_replace('/\D/', '', (string)($invoice->customer_identity_number ?? ''));
-            if ($numIdRecLookup !== '') {
-                $receptorCustomer = \App\Models\Customer::where('identity_number', $numIdRecLookup)->first();
-            }
-        } catch (\Throwable $e) { /* ignore */ }
-        // Nombre del receptor (min 5 máx 100 en v4.4)
-        $nombreReceptorRaw = trim((string)($receptorCustomer->name ?? ($invoice->customer_name ?? 'Consumidor Final')));
-        $nombreReceptor = $this->enforceLength($nombreReceptorRaw, 5, 100, ' ');
-        $receptor->appendChild($dom->createElementNS($ns, 'Nombre', $nombreReceptor));
-        // Identificación del receptor
-        $identRec = $dom->createElementNS($ns, 'Identificacion');
-        $tipoIdRec = $this->sanitizeIdentType((string)($invoice->customer_id_type ?? '01'), '01');
-        $numIdRec = preg_replace('/\D/', '', (string)($invoice->customer_identity_number ?? ''));
-        // Si no hay identificación, usar NITE genérico 000000000000 cuando sea permitido (o dejar vacío si política propia)
-        if ($numIdRec === '') {
-            // Para RFC de Hacienda, se recomienda no inventar; aquí se deja en blanco el nodo Identificacion si no hay dato
-            // y se usa Nombre 'Consumidor Final'. Si se requiere estrictamente, ajustar a normativa de tu negocio.
-        } else {
-            $identRec->appendChild($dom->createElementNS($ns, 'Tipo', $tipoIdRec));
-            $identRec->appendChild($dom->createElementNS($ns, 'Numero', $numIdRec));
-            $receptor->appendChild($identRec);
-        }
-        // Correo del receptor (opcional)
-        $correoReceptor = $invoice->customer_email ?? ($receptorCustomer->email ?? null);
-        if (!empty($correoReceptor)) {
-            $receptor->appendChild($dom->createElementNS($ns, 'CorreoElectronico', substr((string)$correoReceptor, 0, 160)));
-        }
-        $root->appendChild($receptor);
+        // 4) Receptor omitido para tiquete
 
         // 5) Condición de venta / Plazo crédito
         $condicionVenta = $invoice->condition_sale ?? '01';

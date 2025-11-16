@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use Illuminate\Http\Request;
 use App\Models\Invoice;
-use App\Services\FacturaElectronicaXmlService;
+use App\Services\TiqueteElectronicoXmlService;
 
 class InvoiceController extends Controller
 {
@@ -12,7 +12,7 @@ class InvoiceController extends Controller
     public function validateXml($id)
     {
         $invoice = \App\Models\Invoice::findOrFail($id);
-        $xmlService = new \App\Services\FacturaElectronicaXmlService();
+        $xmlService = new \App\Services\TiqueteElectronicoXmlService();
         $validator = new \App\Services\XmlValidatorService();
         $xml = $xmlService->generarXml($invoice);
         // Ruta absoluta al XSD (ajusta si es necesario)
@@ -117,16 +117,22 @@ class InvoiceController extends Controller
         ]);
     }
 
-    // Generar y mostrar el XML de factura electrónica para un Invoice
+    // Generar y mostrar el XML (01 Factura o 04 Tiquete) para un Invoice
      public function xml($id)
     {
         $invoice = Invoice::findOrFail($id);
-        $service = new FacturaElectronicaXmlService();
+        // Elegir servicio según tipo
+        $docType = $invoice->document_type === '01' ? '01' : '04';
+        if ($docType === '01') {
+            $service = new \App\Services\FacturaElectronicaXmlService();
+        } else {
+            $service = new \App\Services\TiqueteElectronicoXmlService();
+        }
         $xml = $service->generarXml($invoice);
 
         // Guardar XML generado y su estado de validación
         try {
-            $xsdPath = base_path('TiqueteElectronico_V4.4.xsd');
+            $xsdPath = $docType === '01' ? base_path('FacturaElectronica_V4.4.xsd') : base_path('TiqueteElectronico_V4.4.xsd');
             $validator = new \App\Services\XmlValidatorService();
 
             $schemaValid = null; $errors = [];
@@ -147,7 +153,7 @@ class InvoiceController extends Controller
 
             $invoice->xmls()->create([
                 'clave' => $clave ?: null,
-                'document_type' => '04',
+                'document_type' => $docType,
                 'schema_version' => '4.4',
                 'xml' => $xml,
                 'schema_valid' => $schemaValid,
@@ -267,6 +273,7 @@ class InvoiceController extends Controller
             // Receptor no obligatorio para tiquete
             'customer_name' => 'nullable|string',
             'customer_identity_number' => 'nullable|string',
+            'customer_id_type' => 'nullable|in:01,02,03,04,05,06',
            
             // Branch / Business info
             'branch_name' => 'required|string',
@@ -294,8 +301,17 @@ class InvoiceController extends Controller
             'payment_method' => 'required|in:Cash,Card,SINPE',
             'amount_paid' => 'nullable|numeric|min:0',
             'receipt' => 'nullable|string',
+            'document_type' => 'nullable|in:01,04',
         ]);
-        $documentType = '04'; 
+        $documentType = $data['document_type'] ?? '04';
+        // Si es Factura (01), exigir datos de receptor básicos
+        if ($documentType === '01') {
+            $request->validate([
+                'customer_name' => 'required|string|min:3',
+                'customer_identity_number' => 'required|string|min:9',
+                'customer_id_type' => 'required|in:01,02,03,04,05,06',
+            ]);
+        }
 
         // Calcular subtotal y total de descuento
         $subtotal = 0;

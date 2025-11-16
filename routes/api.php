@@ -81,6 +81,8 @@ use App\Http\Controllers\EgressController;
     Route::post('batch', [BatchController::class, 'store']);
     Route::put('batch/{id}', [BatchController::class, 'update']);
     Route::delete('batch/{id}', [BatchController::class, 'destroy']);
+    // Reporte combinado de Hacienda (acepta GET y POST para compatibilidad)
+    Route::match(['get', 'post'], 'hacienda-report', [\App\Http\Controllers\HaciendaReportController::class, 'index']);
      // ------------------ Invoices ------------------
     Route::get('invoices', [InvoiceController::class, 'index']);      // List all invoices
     Route::get('invoices/{id}', [InvoiceController::class, 'show']);  // Show single invoice
@@ -92,9 +94,73 @@ use App\Http\Controllers\EgressController;
     Route::post('invoices/{id}/submit', [InvoiceController::class, 'submit']);// Enviar a Hacienda
     Route::get('invoices/{id}/status', [InvoiceController::class, 'status']);// Estado en Hacienda
     Route::get('invoices/{id}/response-xml', [InvoiceController::class, 'responseXml']);// Obtener XML de respuesta de Hacienda
-    Route::get('invoices/{id}/validate-xml', [InvoiceController::class, 'validateXml']); // Validar XML contra XSD
+        Route::get('invoices/{id}/validate-xml', [InvoiceController::class, 'validateXml']); // Validar XML contra XSD
+        // Descarga de XML generado
+        Route::get('xml/download/{id}', [\App\Http\Controllers\XmlDownloadController::class, 'downloadXml'])->name('xml.download');
+        // Descarga de XML de respuesta Hacienda
+        Route::get('responsexml/download/{id}', [\App\Http\Controllers\XmlDownloadController::class, 'downloadResponseXml'])->name('responsexml.download');
     Route::get('invoices/by-business', [InvoiceController::class, 'reportByBusiness']);
 
+    
+    // --------- Aliases semánticos para comprobantes ---------
+    // Crear tiquete (forzar document_type=04)
+    Route::post('tickets', function (Request $request) {
+        $request->merge(['document_type' => '04']);
+        return app(InvoiceController::class)->store($request);
+    });
+    // Crear factura (forzar document_type=01)
+    Route::post('facturas', function (Request $request) {
+        $request->merge(['document_type' => '01']);
+        return app(InvoiceController::class)->store($request);
+    });
+    // Obtener XML tiquete (valida tipo)
+    Route::get('tickets/{id}/xml', function ($id) {
+        $invoice = \App\Models\Invoice::findOrFail($id);
+        if ($invoice->document_type !== '04') {
+            return response()->json(['error' => 'El comprobante no es un Tiquete (04)'], 400);
+        }
+        return app(InvoiceController::class)->xml($id);
+    });
+    // Obtener XML factura (valida tipo)
+    Route::get('facturas/{id}/xml', function ($id) {
+        $invoice = \App\Models\Invoice::findOrFail($id);
+        if ($invoice->document_type !== '01') {
+            return response()->json(['error' => 'El comprobante no es una Factura (01)'], 400);
+        }
+        return app(InvoiceController::class)->xml($id);
+    });
+
+    // Enviar a Hacienda (aliases por tipo)
+    Route::post('tickets/{id}/submit', function ($id) {
+        $invoice = \App\Models\Invoice::findOrFail($id);
+        if ($invoice->document_type !== '04') {
+            return response()->json(['error' => 'El comprobante no es un Tiquete (04)'], 400);
+        }
+        return app(InvoiceController::class)->submit($id);
+    });
+    Route::post('facturas/{id}/submit', function ($id) {
+        $invoice = \App\Models\Invoice::findOrFail($id);
+        if ($invoice->document_type !== '01') {
+            return response()->json(['error' => 'El comprobante no es una Factura (01)'], 400);
+        }
+        return app(InvoiceController::class)->submit($id);
+    });
+
+    // Consultar estado en Hacienda (aliases por tipo)
+    Route::get('tickets/{id}/status', function ($id) {
+        $invoice = \App\Models\Invoice::findOrFail($id);
+        if ($invoice->document_type !== '04') {
+            return response()->json(['error' => 'El comprobante no es un Tiquete (04)'], 400);
+        }
+        return app(InvoiceController::class)->status($id);
+    });
+    Route::get('facturas/{id}/status', function ($id) {
+        $invoice = \App\Models\Invoice::findOrFail($id);
+        if ($invoice->document_type !== '01') {
+            return response()->json(['error' => 'El comprobante no es una Factura (01)'], 400);
+        }
+        return app(InvoiceController::class)->status($id);
+    });
     // ------------------ Cash Registers ------------------
     Route::get('cash-registers', [CashRegisterController::class, 'index']);       // Listar todas las cajas
     Route::get('cash-registers/{id}', [CashRegisterController::class, 'show']);   // Mostrar una caja específica
