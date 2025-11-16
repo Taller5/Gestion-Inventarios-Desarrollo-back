@@ -21,11 +21,15 @@ class CustomerController extends Controller
         $request->validate([
             'name'            => 'required|string|max:255',
             'identity_number' => 'required|string|unique:customers,identity_number',
+            'id_type'         => 'nullable|in:01,02,03,04,05,06',
             'phone'           => 'nullable|string|max:20',
             'email'           => 'required|email|unique:customers,email',
         ]);
-
-        $customer = Customer::create($request->only(['name','identity_number','phone','email']));
+        $payload = $request->only(['name','identity_number','id_type','phone','email']);
+        if (!empty($payload['identity_number'])) {
+            $payload['identity_number'] = preg_replace('/\D/', '', (string)$payload['identity_number']);
+        }
+        $customer = Customer::create($payload);
 
         return response()->json($customer, 201);
     }
@@ -48,11 +52,15 @@ class CustomerController extends Controller
         $request->validate([
             'name'            => 'required|string|max:255',
             'identity_number' => 'required|string|unique:customers,identity_number,' . $id . ',customer_id',
+            'id_type'         => 'nullable|in:01,02,03,04,05,06',
             'phone'           => 'nullable|string|max:20',
             'email'           => 'required|email|unique:customers,email,' . $id . ',customer_id',
         ]);
-
-        $customer->update($request->only(['name','identity_number','phone','email']));
+        $payload = $request->only(['name','identity_number','id_type','phone','email']);
+        if (!empty($payload['identity_number'])) {
+            $payload['identity_number'] = preg_replace('/\D/', '', (string)$payload['identity_number']);
+        }
+        $customer->update($payload);
 
         return response()->json($customer);
     }

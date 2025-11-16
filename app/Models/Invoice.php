@@ -11,6 +11,8 @@ class Invoice extends Model
         'customer_name',
         'customer_identity_number',
         'customer_id_type',
+        'customer_email',
+        'customer_id',
 
         // Branch / Business info
         'branch_name',
@@ -56,6 +58,11 @@ class Invoice extends Model
     {
         return $this->hasMany(HaciendaResponse::class);
     }
+        // Relación con Business (asumiendo campo business_id en la tabla invoices)
+        public function business()
+        {
+            return $this->belongsTo(Business::class, 'business_id', 'negocio_id');
+        }
 
     // Relación con items (detalle de líneas snapshot)
     public function items()

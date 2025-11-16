@@ -131,13 +131,31 @@ class SignerService
         if (!is_file($bridge)) { throw new \RuntimeException('Bridge no encontrado en ' . $bridge); }
 
     // Preferir un binario CLI explícito desde config/env cuando se ejecuta bajo SAPI web
-        $phpBin = (string) (config('services.hacienda.php_cli_path') ?? getenv('HACIENDA_PHP_CLI_PATH') ?: '');
-        if ($phpBin === '') {
-            $phpBin = PHP_BINARY ?: 'php';
+        // Resolver binario CLI de PHP asegurando que sea realmente CLI (no CGI/FPM)
+        $phpCandidates = [];
+        $configured = (string) (config('services.hacienda.php_cli_path') ?? getenv('HACIENDA_PHP_CLI_PATH') ?: '');
+        if ($configured !== '') { $phpCandidates[] = $configured; }
+        if (PHP_BINARY) { $phpCandidates[] = PHP_BINARY; }
+        if (defined('PHP_BINDIR')) { $phpCandidates[] = rtrim(PHP_BINDIR, '\/') . DIRECTORY_SEPARATOR . 'php'; }
+        // Windows Laragon / XAMPP paths comunes
+        $phpCandidates[] = 'C:\laragon\bin\php\php.exe';
+        $phpCandidates[] = 'C:\xampp\php\php.exe';
+        // Fallback genérico
+        $phpCandidates[] = 'php';
+        $phpBin = null;
+        foreach ($phpCandidates as $cand) {
+            if ($cand === '' ) { continue; }
+            // Si es 'php', aceptar para que proc_open intente PATH.
+            if ($cand === 'php') { $phpBin = $cand; break; }
+            if (is_file($cand)) { $phpBin = $cand; break; }
         }
-    // Si se proporcionó una ruta no vacía pero no existe, volver al valor por defecto
-        if ($phpBin !== 'php' && !is_file($phpBin)) {
-            $phpBin = PHP_BINARY ?: 'php';
+        if ($phpBin === null) { $phpBin = 'php'; }
+        // Verificar que el binario produce 'cli' en php_sapi_name()
+        $sapiCheckCmd = escapeshellarg($phpBin) . ' -r "echo php_sapi_name();"';
+        $sapiOut = @shell_exec($sapiCheckCmd);
+        if ($sapiOut !== null && stripos($sapiOut, 'cli') === false) {
+            // Forzar fallback 'php' genérico para intentar PATH
+            $phpBin = 'php';
         }
         $cmd = escapeshellarg($phpBin) . ' ' . escapeshellarg($bridge) . ' '
             . escapeshellarg($altDir) . ' '
