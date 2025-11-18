@@ -7,6 +7,8 @@ use App\Models\Product;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
+use Illuminate\Support\Facades\Log;
+
 
 class PromotionController extends Controller
 {
@@ -390,13 +392,13 @@ public function restorePromotionStock(Request $request)
             'carrito.*.promocion_id' => 'nullable|integer|exists:promotions,id',
         ]);
 
-        \Log::info(' Restaurando promociones del carrito', ['carrito' => $validated['carrito']]);
+        Log::info(' Restaurando promociones del carrito', ['carrito' => $validated['carrito']]);
 
         $carrito = collect($validated['carrito']);
 
         foreach ($carrito as $item) {
             if (empty($item['promocion_id'])) {
-                \Log::debug('⏭ Producto sin promoción, se omite', $item);
+                Log::debug('⏭ Producto sin promoción, se omite', $item);
                 continue;
             }
 
@@ -406,13 +408,13 @@ public function restorePromotionStock(Request $request)
 
             $promo = Promotion::find($promoId);
             if (!$promo) {
-                \Log::warning(" Promoción no encontrada", ['promocion_id' => $promoId]);
+                Log::warning(" Promoción no encontrada", ['promocion_id' => $promoId]);
                 continue;
             }
 
             $pivotRecord = $promo->products()->where('product_id', $productoId)->first();
             if (!$pivotRecord) {
-                \Log::warning(" Producto no encontrado en la promoción", [
+                Log::warning(" Producto no encontrado en la promoción", [
                     'promocion_id' => $promoId,
                     'producto_id' => $productoId
                 ]);
@@ -427,7 +429,7 @@ public function restorePromotionStock(Request $request)
                 'cantidad' => $nuevaCantidad
             ]);
 
-            \Log::info(' Stock restaurado en promoción', [
+            Log::info(' Stock restaurado en promoción', [
                 'promocion_id' => $promoId,
                 'producto_id' => $productoId,
                 'stock_anterior' => $stockActual,
@@ -439,7 +441,7 @@ public function restorePromotionStock(Request $request)
         DB::commit();
 
         //  Limpiar carrito: se devuelve vacío al frontend
-        \Log::info(' Carrito limpiado después de restaurar promociones');
+        Log::info(' Carrito limpiado después de restaurar promociones');
 
         return response()->json([
             'success' => true,
@@ -448,7 +450,7 @@ public function restorePromotionStock(Request $request)
         ]);
     } catch (\Throwable $e) {
         DB::rollBack();
-        \Log::error(' Error al restaurar stock de promociones', [
+        Log::error(' Error al restaurar stock de promociones', [
             'error' => $e->getMessage(),
             'trace' => $e->getTraceAsString()
         ]);
